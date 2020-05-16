@@ -15,8 +15,8 @@ from . import spectrum_schema
 
 
 logging.basicConfig(
-    level=logging.ERROR,
-    format="-- [%(asctime)s] - %(levelname)s - %(filename)s - %(message)s",
+    level=logging.WARN,
+    format="-- [%(asctime)s][%(levelname)s][%(filename)s] - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
