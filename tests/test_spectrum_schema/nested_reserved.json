@@ -1,0 +1,25 @@
+{
+    "uid": "1",
+    "data": {
+        "user": "username",
+        "events": [
+            {
+                "timestamp": 0,
+                "a": true
+            },
+            {
+                "timestamp": 1,
+                "a": true
+            },
+            {
+                "timestamp": 2,
+                "a": true
+            }
+        ],
+        "nested_reserved": {
+            "column": 0,
+            "table": 1
+        }
+    },
+    "test-underscore": 0
+}
