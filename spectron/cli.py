@@ -44,7 +44,7 @@ def parse_arguments():
         description="auto generate Spectrum DDL from JSON",
     )
 
-    parser.set_defaults(mapping=None, type_map=None)
+    parser.set_defaults(partitions=None, mapping=None, type_map=None)
 
     parser.add_argument("-v", "--version", action="version", version=version)
 
@@ -81,9 +81,9 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "-a",
-        "--ignore_nested_arrarys",
-        action="store_true",
+        "-e",
+        "--error_nested_arrarys",
+        action="store_false",
         dest="ignore_nested_arrarys",
         help="ignore nested arrays",
     )
@@ -98,7 +98,7 @@ def parse_arguments():
 
     parser.add_argument(
         "-p",
-        "--partitions",
+        "--partitions_file",
         type=argparse.FileType("r"),
         dest="partitions",
         help="JSON filepath to map parition column(s) e.g. {column: dtype}",
@@ -113,14 +113,14 @@ def parse_arguments():
         "--mapping",
         type=argparse.FileType("r"),
         dest="mapping_file",
-        help="JSON file to use for mapping field names e.g. {field_name: new_field_name}",
+        help="JSON filepath to use for mapping field names e.g. {field_name: new_field_name}",
     )
     parser.add_argument(
         "-y",
         "--type_map",
         type=argparse.FileType("r"),
         dest="type_map_file",
-        help="JSON file to use for mapping field names to known data types e.g. {key: value}",
+        help="JSON filepath to use for mapping field names to known data types e.g. {key: value}",
     )
 
     parser.add_argument(
@@ -132,6 +132,9 @@ def parse_arguments():
     )
 
     args = parser.parse_args()
+
+    if args.partitions_file:
+        args.partitions = json.loads(args.partitions_file.read())
 
     if args.mapping_file:
         args.mapping = json.loads(args.mapping_file.read())
