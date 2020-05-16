@@ -74,7 +74,11 @@ def set_options(
 
     bool_str = lambda b: "TRUE" if b else "FALSE"
 
-    if not s3_key:
+    if s3_key:
+        s3_key = s3_key.strip()
+        if not s3_key.startswith("s3://"):
+            s3_key = f"s3://{s3_key}"
+    else:
         s3_key = "s3://{bucket}/{prefix}"
 
     # Partitions
