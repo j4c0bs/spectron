@@ -4,7 +4,7 @@ import json
 import pytest
 
 from spectron.spectrum_schema import (
-    conform_syntax,
+    _conform_syntax,
     define_types,
     format_definitions,
     from_dict,
@@ -22,7 +22,7 @@ def test_full_run(datadir):
 
 @pytest.mark.parametrize("d, expected", [])
 def test_conform_syntax(d, expected):
-    assert conform_syntax(d) == expected
+    assert _conform_syntax(d) == expected
 
 
 @pytest.mark.parametrize(

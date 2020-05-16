@@ -18,7 +18,7 @@ logger = logging.getLogger("spectron")
 # --------------------------------------------------------------------------------------
 
 
-def count_indent(line):
+def _count_indent(line):
     for _ in takewhile(lambda c: c == " ", line):
         yield 1
 
@@ -26,13 +26,13 @@ def count_indent(line):
 def strip_top_level_seps(s):
     lines = []
     for line in s.split("\n"):
-        if sum(count_indent(line)) == 4:
+        if sum(_count_indent(line)) == 4:
             line = line.replace(":", " ")
         lines.append(line)
     return "\n".join(lines)
 
 
-def conform_syntax(d):
+def _conform_syntax(d):
     """Replace Python syntax to match Spectrum DDL syntax."""
 
     s = json.dumps(d, indent=4).strip()
@@ -59,7 +59,7 @@ def conform_syntax(d):
 # --------------------------------------------------------------------------------------
 
 
-def as_parent_key(parent, key):
+def _as_parent_key(parent, key):
     """Construct parent key."""
 
     if parent:
@@ -67,7 +67,7 @@ def as_parent_key(parent, key):
     return key
 
 
-def inspect_array(array, parent, ignore_nested_arrarys):
+def _inspect_array(array, parent, ignore_nested_arrarys):
     """Check for nested arrays and report."""
 
     num_arrays = sum(isinstance(item, list) for item in array)
@@ -120,8 +120,8 @@ def define_types(
         if isinstance(d, list):
             as_types = []
 
-            parent_key = as_parent_key(parent, "array")
-            inspect_array(d, parent_key, ignore_nested_arrarys)
+            parent_key = _as_parent_key(parent, "array")
+            _inspect_array(d, parent_key, ignore_nested_arrarys)
 
             for item in d:
                 if isinstance(item, list):
@@ -134,7 +134,7 @@ def define_types(
                 if key in ignore_fields:
                     continue
 
-                parent_key = as_parent_key(parent, key)
+                parent_key = _as_parent_key(parent, key)
 
                 if case_insensitive:
                     key = key.lower()
@@ -194,7 +194,7 @@ def format_definitions(
         ignore_nested_arrarys=ignore_nested_arrarys,
     )
 
-    definitions = conform_syntax(with_types)
+    definitions = _conform_syntax(with_types)
     return definitions, key_map
 
 
