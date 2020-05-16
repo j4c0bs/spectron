@@ -44,6 +44,8 @@ def parse_arguments():
         description="auto generate Spectrum DDL from JSON",
     )
 
+    parser.set_defaults(mapping=None, type_map=None)
+
     parser.add_argument("-v", "--version", action="version", version=version)
 
     parser.add_argument(
@@ -106,19 +108,18 @@ def parse_arguments():
         "--s3", type=str, dest="s3_key", help="S3 Key prefix e.g. bucket/dir",
     )
 
-    # TODO: str or input file
     parser.add_argument(
         "-m",
         "--mapping",
         type=argparse.FileType("r"),
-        dest="mapping",
+        dest="mapping_file",
         help="JSON file to use for mapping field names e.g. {field_name: new_field_name}",
     )
     parser.add_argument(
         "-y",
         "--type_map",
         type=argparse.FileType("r"),
-        dest="type_map",
+        dest="type_map_file",
         help="JSON file to use for mapping field names to known data types e.g. {key: value}",
     )
 
@@ -131,6 +132,13 @@ def parse_arguments():
     )
 
     args = parser.parse_args()
+
+    if args.mapping_file:
+        args.mapping = json.loads(args.mapping_file.read())
+
+    if args.type_map_file:
+        args.type_map = json.loads(args.type_map_file.read())
+
     return args
 
 

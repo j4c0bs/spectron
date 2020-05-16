@@ -106,7 +106,7 @@ def define_types(
                 if case_insensitive:
                     key = key.lower()
 
-                if key in mapping or ("-" in key and convert_hyphens):
+                if (mapping and key in mapping) or ("-" in key and convert_hyphens):
                     if key in mapping:
                         new_key = mapping[key]
                     else:
@@ -126,7 +126,7 @@ def define_types(
                 if isinstance(val, (dict, list)):
                     as_types[key] = parse_types(val)
                 else:
-                    if key in type_map:
+                    if type_map and key in type_map:
                         dtype = type_map[key]
                     else:
                         dtype = data_types.set_dtype(val)
@@ -154,15 +154,18 @@ def format_definitions(
     ignore_fields=None,
     convert_hyphens=False,
     case_insensitive=False,
+    ignore_nested_arrarys=True,
 ):
     """Format field names and set dtypes."""
 
     with_types, key_map = define_types(
         d,
         mapping=mapping,
+        type_map=type_map,
         ignore_fields=ignore_fields,
         convert_hyphens=convert_hyphens,
         case_insensitive=case_insensitive,
+        ignore_nested_arrarys=ignore_nested_arrarys,
     )
 
     definitions = conform_syntax(with_types)
@@ -181,12 +184,19 @@ def from_dict(
     s3_key=None,
     case_insensitive=True,
     ignore_malformed_json=True,
+    ignore_nested_arrarys=True,
     **kwargs,
 ):
     """Create Spectrum schema from dict."""
 
     definitions, key_map = format_definitions(
-        d, mapping, type_map, ignore_fields, convert_hyphens, case_insensitive
+        d,
+        mapping,
+        type_map,
+        ignore_fields,
+        convert_hyphens,
+        case_insensitive,
+        ignore_nested_arrarys,
     )
 
     statement = ddl.create_statement(
