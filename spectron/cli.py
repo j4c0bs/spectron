@@ -85,7 +85,7 @@ def parse_arguments():
         "--error_nested_arrarys",
         action="store_false",
         dest="ignore_nested_arrarys",
-        help="ignore nested arrays",
+        help="raise exception for nested arrays",
     )
 
     parser.add_argument(
@@ -100,7 +100,7 @@ def parse_arguments():
         "-p",
         "--partitions_file",
         type=argparse.FileType("r"),
-        dest="partitions",
+        dest="partitions_file",
         help="JSON filepath to map parition column(s) e.g. {column: dtype}",
     )
 
