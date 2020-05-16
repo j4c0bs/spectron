@@ -18,7 +18,7 @@ logger = logging.getLogger("spectron")
 # --------------------------------------------------------------------------------------
 
 
-def count_indent(line):
+def _count_indent(line):
     for _ in takewhile(lambda c: c == " ", line):
         yield 1
 
@@ -26,13 +26,13 @@ def count_indent(line):
 def strip_top_level_seps(s):
     lines = []
     for line in s.split("\n"):
-        if sum(count_indent(line)) == 4:
+        if sum(_count_indent(line)) == 4:
             line = line.replace(":", " ")
         lines.append(line)
     return "\n".join(lines)
 
 
-def conform_syntax(d):
+def _conform_syntax(d):
     """Replace Python syntax to match Spectrum DDL syntax."""
 
     s = json.dumps(d, indent=4).strip()
@@ -59,6 +59,27 @@ def conform_syntax(d):
 # --------------------------------------------------------------------------------------
 
 
+def _as_parent_key(parent, key):
+    """Construct parent key."""
+
+    if parent:
+        return f"{parent}.{key}"
+    return key
+
+
+def _inspect_array(array, parent, ignore_nested_arrarys):
+    """Check for nested arrays and report."""
+
+    num_arrays = sum(isinstance(item, list) for item in array)
+
+    if num_arrays:
+        if ignore_nested_arrarys:
+            logger.warn(f"Skipping nested arrays ({num_arrays}) in {parent}...")
+        else:
+            msg = f"Nested arrays detected ({num_arrays}) in {parent}..."
+            raise ValueError(msg)
+
+
 def define_types(
     d,
     mapping=None,
@@ -81,39 +102,44 @@ def define_types(
 
     key_map = {}  # dict of confirmed keys to include in serde mapping
 
-    def parse_types(d):
+    def check_key_map(key):
         nonlocal key_map
+
+        if (mapping and key in mapping) or ("-" in key and convert_hyphens):
+            if key in mapping:
+                new_key = mapping[key]
+            else:
+                new_key = key.replace("-", "_")
+
+            key_map[new_key] = key
+            return new_key
+        return key
+
+    def parse_types(d, parent=None):
 
         if isinstance(d, list):
             as_types = []
+
+            parent_key = _as_parent_key(parent, "array")
+            _inspect_array(d, parent_key, ignore_nested_arrarys)
+
             for item in d:
                 if isinstance(item, list):
-                    if ignore_nested_arrarys:
-                        # # TODO: get parent field for reference
-                        # logger.warn(f"Skipping nested array...")
-                        continue
-                    else:
-                        raise ValueError("Array types cannot contain arrays...")
-                as_types.append(parse_types(item))
+                    continue
+                as_types.append(parse_types(item, parent=parent_key))
 
         elif isinstance(d, dict):
             as_types = {}
             for key, val in d.items():
-
                 if key in ignore_fields:
                     continue
+
+                parent_key = _as_parent_key(parent, key)
 
                 if case_insensitive:
                     key = key.lower()
 
-                if key in mapping or ("-" in key and convert_hyphens):
-                    if key in mapping:
-                        new_key = mapping[key]
-                    else:
-                        new_key = key.replace("-", "_")
-
-                    key_map[new_key] = key
-                    key = new_key
+                key = check_key_map(key)
 
                 # replace back ticks with quotes after formatting
                 if not convert_hyphens and "-" in key:
@@ -124,9 +150,9 @@ def define_types(
                     key = f"`{key}`"
 
                 if isinstance(val, (dict, list)):
-                    as_types[key] = parse_types(val)
+                    as_types[key] = parse_types(val, parent=parent_key)
                 else:
-                    if key in type_map:
+                    if type_map and key in type_map:
                         dtype = type_map[key]
                     else:
                         dtype = data_types.set_dtype(val)
@@ -154,18 +180,21 @@ def format_definitions(
     ignore_fields=None,
     convert_hyphens=False,
     case_insensitive=False,
+    ignore_nested_arrarys=True,
 ):
     """Format field names and set dtypes."""
 
     with_types, key_map = define_types(
         d,
         mapping=mapping,
+        type_map=type_map,
         ignore_fields=ignore_fields,
         convert_hyphens=convert_hyphens,
         case_insensitive=case_insensitive,
+        ignore_nested_arrarys=ignore_nested_arrarys,
     )
 
-    definitions = conform_syntax(with_types)
+    definitions = _conform_syntax(with_types)
     return definitions, key_map
 
 
@@ -181,12 +210,19 @@ def from_dict(
     s3_key=None,
     case_insensitive=True,
     ignore_malformed_json=True,
+    ignore_nested_arrarys=True,
     **kwargs,
 ):
     """Create Spectrum schema from dict."""
 
     definitions, key_map = format_definitions(
-        d, mapping, type_map, ignore_fields, convert_hyphens, case_insensitive
+        d,
+        mapping,
+        type_map,
+        ignore_fields,
+        convert_hyphens,
+        case_insensitive,
+        ignore_nested_arrarys,
     )
 
     statement = ddl.create_statement(

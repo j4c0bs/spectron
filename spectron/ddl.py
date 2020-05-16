@@ -43,6 +43,24 @@ def create_table(definitions, schema=None, table=None):
     return f"{create} (\n{definitions}\n)"
 
 
+def format_s3_key(s3_key):
+    if s3_key:
+        s3_key = s3_key.strip()
+        if not s3_key.startswith("s3://"):
+            s3_key = f"s3://{s3_key}"
+    else:
+        s3_key = "s3://{bucket}/{prefix}"
+    return s3_key
+
+
+def format_partitions(partitions):
+    partition_by = ""
+    if partitions:
+        key_types = (f"{key} {dtype.upper()}" for (key, dtype) in partitions.items())
+        partition_by = f"PARTITIONED BY ({', '.join(key_types)})"
+    return partition_by
+
+
 def set_options(
     key_map=None,
     partitions=None,
@@ -56,9 +74,8 @@ def set_options(
         key_map (dict):
             - default: None
             - mapping for for column names
-        partitions (list(str)):
+        partitions (dict):
             - default: None
-            - [(column, dtype),] partitions
         s3_key (str):
             - default: None
             - S3 key prefix
@@ -74,16 +91,6 @@ def set_options(
 
     bool_str = lambda b: "TRUE" if b else "FALSE"
 
-    if not s3_key:
-        s3_key = "s3://{bucket}/{prefix}"
-
-    # Partitions
-    if partitions:
-        key_types = (f"{key} {dtype.upper()}" for (key, dtype) in partitions)
-        partition_by = f"PARTITIONED BY ({', '.join(key_types)})"
-    else:
-        partition_by = ""
-
     # OpenX Serde Properties
     serde_properties = []
     if key_map:
@@ -97,7 +104,7 @@ def set_options(
     serde_properties = ",\n".join(serde_properties)
 
     statement = f"""
-{partition_by}
+{format_partitions(partitions)}
 ROW FORMAT SERDE
 {indent_quoted(SERDE_FORMAT)}
 WITH SERDEPROPERTIES (
@@ -107,7 +114,7 @@ STORED AS INPUTFORMAT
 {indent_quoted(INPUTFORMAT)}
 OUTPUTFORMAT
 {indent_quoted(OUTPUTFORMAT)}
-LOCATION '{s3_key}';"""
+LOCATION '{format_s3_key(s3_key)}';"""
 
     return statement.strip()
 
@@ -137,9 +144,9 @@ def create_statement(
         key_map (dict):
             - default: None
             - mapping for for column names
-        partitions (list(str)):
+        partitions (dict):
             - default: None
-            - [(column, dtype),] partitions
+            - {column: dtype}
         s3_key (str):
             - default: None
             - S3 key prefix
