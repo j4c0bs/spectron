@@ -57,11 +57,11 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "-c",
-        "--convert_hyphens",
-        action="store_true",
+        "-r",
+        "--retain_hyphens",
+        action="store_false",
         dest="convert_hyphens",
-        help="auto convert hypens to underscores (adds field to mapping)",
+        help="disable auto convert hypens to underscores",
     )
 
     parser.add_argument(
@@ -73,39 +73,11 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "-j",
-        "--ignore_malformed_json",
-        action="store_true",
-        dest="ignore_malformed_json",
-        help="ignore malformed json",
-    )
-
-    parser.add_argument(
         "-e",
         "--error_nested_arrarys",
         action="store_false",
         dest="ignore_nested_arrarys",
         help="raise exception for nested arrays",
-    )
-
-    parser.add_argument(
-        "-s", "--schema", type=str, dest="schema", help="Schema name",
-    )
-
-    parser.add_argument(
-        "-t", "--table", type=str, dest="table", help="Table name",
-    )
-
-    parser.add_argument(
-        "-p",
-        "--partitions_file",
-        type=argparse.FileType("r"),
-        dest="partitions_file",
-        help="JSON filepath to map parition column(s) e.g. {column: dtype}",
-    )
-
-    parser.add_argument(
-        "--s3", type=str, dest="s3_key", help="S3 Key prefix e.g. bucket/dir",
     )
 
     parser.add_argument(
@@ -129,6 +101,34 @@ def parse_arguments():
         type=str_list_type,
         dest="ignore_fields",
         help="Comma separated fields to ignore",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--partitions_file",
+        type=argparse.FileType("r"),
+        dest="partitions_file",
+        help="DDL: JSON filepath to map parition column(s) e.g. {column: dtype}",
+    )
+
+    parser.add_argument(
+        "-j",
+        "--ignore_malformed_json",
+        action="store_true",
+        dest="ignore_malformed_json",
+        help="DDL: ignore malformed json",
+    )
+
+    parser.add_argument(
+        "-s", "--schema", type=str, dest="schema", help="DDL: schema name",
+    )
+
+    parser.add_argument(
+        "-t", "--table", type=str, dest="table", help="DDL: table name",
+    )
+
+    parser.add_argument(
+        "--s3", type=str, dest="s3_key", help="DDL: S3 Key prefix e.g. bucket/dir",
     )
 
     args = parser.parse_args()
