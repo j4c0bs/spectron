@@ -1,3 +1,5 @@
+![Upload Python Package](https://github.com/j4c0bs/spectron/workflows/Upload%20Python%20Package/badge.svg?branch=master&event=push)
+
 # [WIP] spectron
 
 Generate AWS Spectrum DDL from JSON
