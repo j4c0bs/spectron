@@ -21,7 +21,7 @@ jobs:
         pip install setuptools wheel twine pytest pytest-datadir
     - name: Test with pytest
       run: |
-        pytest
+        pytest --rootdir='$HOME/spectron'
     - name: Build and publish
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
