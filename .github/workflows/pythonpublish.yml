@@ -20,8 +20,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install setuptools wheel twine pytest pytest-datadir
     - name: Test with pytest
-      env:
-        PYTHONPATH: "${{ github.workspace }}:${{ github.workspace }}/spectron"
       run: |
         pytest -vv --rootdir=$HOME/work/spectron
     - name: Build and publish
