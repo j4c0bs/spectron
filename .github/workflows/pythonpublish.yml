@@ -23,7 +23,7 @@ jobs:
       env:
         PYTHONPATH: "${{ github.workspace }}:${{ github.workspace }}/spectron"
       run: |
-        pytest -vv --rootdir=${{ github.workspace }}/spectron
+        pytest -vv --rootdir=$HOME/work/spectron
     - name: Build and publish
       env:
         TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
