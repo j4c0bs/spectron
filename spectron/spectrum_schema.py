@@ -70,14 +70,17 @@ def _as_parent_key(parent, key):
 def _inspect_array(array, parent, ignore_nested_arrarys):
     """Check for nested arrays and report."""
 
-    num_arrays = sum(isinstance(item, list) for item in array)
+    if not array:
+        logger.warn(f"Skipping empty array in {parent}...")
+    else:
+        num_arrays = sum(isinstance(item, list) for item in array)
 
-    if num_arrays:
-        if ignore_nested_arrarys:
-            logger.warn(f"Skipping nested arrays ({num_arrays}) in {parent}...")
-        else:
-            msg = f"Nested arrays detected ({num_arrays}) in {parent}..."
-            raise ValueError(msg)
+        if num_arrays:
+            if ignore_nested_arrarys:
+                logger.warn(f"Skipping nested arrays ({num_arrays}) in {parent}...")
+            else:
+                msg = f"Nested arrays detected ({num_arrays}) in {parent}..."
+                raise ValueError(msg)
 
 
 def define_types(
@@ -119,7 +122,6 @@ def define_types(
 
         if isinstance(d, list):
             as_types = []
-
             parent_key = _as_parent_key(parent, "array")
             _inspect_array(d, parent_key, ignore_nested_arrarys)
 
@@ -150,7 +152,11 @@ def define_types(
                     key = f"`{key}`"
 
                 if isinstance(val, (dict, list)):
-                    as_types[key] = parse_types(val, parent=parent_key)
+                    dtype = parse_types(val, parent=parent_key)
+
+                    if dtype:
+                        as_types[key] = dtype
+
                 else:
                     if type_map and key in type_map:
                         dtype = type_map[key]
