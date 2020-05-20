@@ -6,14 +6,6 @@ CREATE EXTERNAL TABLE {schema}.{table} (
             struct<
                 "timestamp": SMALLINT,
                 a: BOOL
-            >,
-            struct<
-                "timestamp": SMALLINT,
-                a: BOOL
-            >,
-            struct<
-                "timestamp": SMALLINT,
-                a: BOOL
             >
         >,
         nested_reserved: struct<
