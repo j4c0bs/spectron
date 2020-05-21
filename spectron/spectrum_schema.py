@@ -243,6 +243,31 @@ def format_definitions(
     return definitions, key_map
 
 
+def validate_input(d):
+    """Check input type is dict|list."""
+
+    if not d:
+        raise ValueError("Input is empty...")
+
+    if not isinstance(d, (dict, list)):
+        raise ValueError("Invalid input type...")
+
+
+def loc_dict(d):
+    """Locate largest dict if list(dict) provided."""
+
+    if isinstance(d, list):
+        if all(isinstance(item, dict) for item in d):
+            if len(d) > 1:
+                d = sorted(d, key=count_members, reverse=True)[0]
+            else:
+                d = d[0]
+        else:
+            raise ValueError("Input list contains dtypes other than dict...")
+
+    return d
+
+
 def from_dict(
     d,
     mapping=None,
@@ -259,6 +284,9 @@ def from_dict(
     **kwargs,
 ):
     """Create Spectrum schema from dict."""
+
+    validate_input(d)
+    d = loc_dict(d)
 
     definitions, key_map = format_definitions(
         d,
