@@ -11,7 +11,7 @@ except ImportError:
     import json
 
 from . import __version__ as version
-from . import spectrum_schema
+from . import ddl
 
 
 logging.basicConfig(
@@ -161,5 +161,5 @@ def create_spectrum_schema():
     args = parse_arguments()
     d = json.loads(args.infile.read())
     kwargs = {k: v for (k, v) in args._get_kwargs()}
-    statement = spectrum_schema.from_dict(d, **kwargs)
+    statement = ddl.from_dict(d, **kwargs)
     print(statement)

@@ -3,7 +3,7 @@
 import json
 import pytest
 
-import spectron.spectrum_schema as ss
+import spectron.ddl as ss
 
 
 def load_sql(path):
