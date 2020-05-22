@@ -123,22 +123,39 @@ def define_types(
 
     key_map = {}  # dict of confirmed keys to include in serde mapping
 
-    def check_key_map(key):
+    def check_key_map(key, parent):
         """Check if key is in user defined map or has underscores converted."""
 
         nonlocal key_map
 
-        check_map = mapping and key in mapping
-        check_hyphens = convert_hyphens and "-" in key
+        use_key_map = mapping and key in mapping
+        use_case_map = case_map and any(c.isupper() for c in key)
+        replace_hyphens = convert_hyphens and "-" in key
 
-        if check_map or check_hyphens:
-            if check_map:
-                new_key = mapping[key]
+        if use_key_map or use_case_map or replace_hyphens:
+            if use_key_map:
+                mapped_key = mapping[key]
+            elif use_case_map:
+                mapped_key = key.lower()
             else:
-                new_key = key.replace("-", "_")
+                mapped_key = key.replace("-", "_")
 
-            key_map[new_key] = key
-            return new_key
+            key_map[mapped_key] = key
+            key = mapped_key
+
+        else:
+            if case_insensitive:
+                key = key.lower()
+
+            # replace back ticks with quotes after formatting
+            if not convert_hyphens and "-" in key:
+                key = f"`{key}`"
+
+            # reserved keywords must be enclosed in double quotes
+            if key.lower() in reserved.keywords:
+                logger.info(f"Reserved keyword detected: {parent}.{key}")
+                key = f"`{key}`"
+
         return key
 
     def parse_types(d, parent=None):
@@ -172,38 +189,29 @@ def define_types(
                 if ignore_fields and key in ignore_fields:
                     continue
 
+                dtype = None
                 parent_key = _as_parent_key(parent, key)
 
-                if case_insensitive:
-                    key = key.lower()
-                elif case_map and any(c.isupper() for c in key):
-                    key_map[key.lower()] = key
-                    key = key.lower()
+                # set user defined dtype
+                if type_map and key in type_map:
+                    dtype = type_map[key]
 
-                key = check_key_map(key)
-
-                # replace back ticks with quotes after formatting
-                if not convert_hyphens and "-" in key:
-                    key = f"`{key}`"
-
-                if key in reserved.keywords:
-                    logger.info(f"Enclosing reserved keyword in quotes: {parent}.{key}")
-                    key = f"`{key}`"
+                key = check_key_map(key, parent)
 
                 if isinstance(val, (dict, list)):
                     dtype = parse_types(val, parent=parent_key)
-
                     if dtype:
                         as_types[key] = dtype
-
                 else:
-                    if type_map and key in type_map:
-                        dtype = type_map[key]
-                    else:
+                    if not dtype:
                         dtype = data_types.set_dtype(val)
 
+                    # skip keys with unknown data types and log
                     if "UNKNOWN" in dtype:
-                        logger.warn(f"Unknown dtype for {parent_key}.{key}: {val}")
+                        _str_dtype = dtype.split("_", 1)[1]
+                        logger.warn(
+                            f"Unknown dtype {_str_dtype} for {parent_key}.{key}: {val}"
+                        )
                     else:
                         as_types[key] = dtype
 
