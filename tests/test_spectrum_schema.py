@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from spectron.spectrum_schema import from_dict
+import spectron.spectrum_schema as ss
 
 
 def load_sql(path):
@@ -21,4 +21,29 @@ def test__from_dict__defaults(filename, datadir):
     result_path = datadir / f"{filename}.sql"
 
     d = load_json(input_path)
-    assert from_dict(d).strip() == result_path.read_text().strip()
+    assert ss.from_dict(d).strip() == result_path.read_text().strip()
+
+
+# --------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "d, expected",
+    [
+        (0, 1),
+        ([1, 2], 2),
+        ({}, 0),
+        ({"a": 0}, 2),
+        ({"a": 0, "b": 1}, 4),
+        ({"a": [{"a1": 1, "a2": 2}], "b": {"b1": 1, "b2": 2}}, 11),
+    ],
+)
+def test__count_members(d, expected):
+    assert ss.count_members(d) == expected
+
+
+@pytest.mark.parametrize(
+    "d, expected", [({}, {}), ([{"a": 1}, {"a": 1, "b": 2}], {"a": 1, "b": 2})]
+)
+def test__loc_dict(d, expected):
+    assert ss.loc_dict(d) == expected
