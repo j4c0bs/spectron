@@ -56,6 +56,24 @@ def parse_arguments():
         help="JSON to convert",
     )
 
+    case_group = parser.add_mutually_exclusive_group()
+
+    case_group.add_argument(
+        "-c",
+        "--case_map",
+        action="store_true",
+        dest="case_map",
+        help="disable case insensitivity and map field with uppercase chars to lowercase",
+    )
+
+    case_group.add_argument(
+        "-l",
+        "--lowercase",
+        action="store_true",
+        dest="case_insensitive",
+        help="DDL: enable case insensitivity and force all fields to lowercase - applied before field lookup in mapping",
+    )
+
     parser.add_argument(
         "-r",
         "--retain_hyphens",
@@ -65,19 +83,27 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "-l",
-        "--lowercase",
-        action="store_true",
-        dest="case_insensitive",
-        help="enable case insensitivity and force all fields to lowercase - applied before field lookup in mapping",
-    )
-
-    parser.add_argument(
         "-e",
         "--error_nested_arrarys",
         action="store_false",
         dest="ignore_nested_arrarys",
         help="raise exception for nested arrays",
+    )
+
+    parser.add_argument(
+        "-f",
+        "--ignore_fields",
+        type=str_list_type,
+        dest="ignore_fields",
+        help="Comma separated fields to ignore",
+    )
+
+    parser.add_argument(
+        "-j",
+        "--ignore_malformed_json",
+        action="store_true",
+        dest="ignore_malformed_json",
+        help="DDL: ignore malformed json",
     )
 
     parser.add_argument(
@@ -96,27 +122,11 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "-f",
-        "--ignore_fields",
-        type=str_list_type,
-        dest="ignore_fields",
-        help="Comma separated fields to ignore",
-    )
-
-    parser.add_argument(
         "-p",
         "--partitions_file",
         type=argparse.FileType("r"),
         dest="partitions_file",
         help="DDL: JSON filepath to map parition column(s) e.g. {column: dtype}",
-    )
-
-    parser.add_argument(
-        "-j",
-        "--ignore_malformed_json",
-        action="store_true",
-        dest="ignore_malformed_json",
-        help="DDL: ignore malformed json",
     )
 
     parser.add_argument(

@@ -115,6 +115,7 @@ def define_types(
     type_map=None,
     ignore_fields=None,
     convert_hyphens=False,
+    case_map=False,
     case_insensitive=False,
     ignore_nested_arrarys=True,
 ):
@@ -163,7 +164,7 @@ def define_types(
                     if isinstance(item, list):
                         continue
                     as_types.append(parse_types(item, parent=parent_key))
-                    as_types = sorted(set(as_types))
+                as_types = sorted(set(as_types))
 
         elif isinstance(d, dict):
             as_types = {}
@@ -174,6 +175,9 @@ def define_types(
                 parent_key = _as_parent_key(parent, key)
 
                 if case_insensitive:
+                    key = key.lower()
+                elif case_map and any(c.isupper() for c in key):
+                    key_map[key.lower()] = key
                     key = key.lower()
 
                 key = check_key_map(key)
@@ -220,6 +224,7 @@ def format_definitions(
     type_map=None,
     ignore_fields=None,
     convert_hyphens=False,
+    case_map=False,
     case_insensitive=False,
     ignore_nested_arrarys=True,
 ):
@@ -231,6 +236,7 @@ def format_definitions(
         type_map=type_map,
         ignore_fields=ignore_fields,
         convert_hyphens=convert_hyphens,
+        case_map=case_map,
         case_insensitive=case_insensitive,
         ignore_nested_arrarys=ignore_nested_arrarys,
     )
@@ -278,7 +284,8 @@ def from_dict(
     table=None,
     partitions=None,
     s3_key=None,
-    case_insensitive=True,
+    case_map=False,
+    case_insensitive=False,
     ignore_malformed_json=True,
     ignore_nested_arrarys=True,
     **kwargs,
@@ -294,6 +301,7 @@ def from_dict(
         type_map,
         ignore_fields,
         convert_hyphens,
+        case_map,
         case_insensitive,
         ignore_nested_arrarys,
     )
