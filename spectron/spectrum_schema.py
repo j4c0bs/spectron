@@ -10,7 +10,7 @@ except ImportError:
     import json
 
 from . import data_types
-from . import ddl
+from . import write_ddl
 from . import reserved
 
 
@@ -314,7 +314,7 @@ def from_dict(
         ignore_nested_arrarys,
     )
 
-    statement = ddl.create_statement(
+    statement = write_ddl.create_statement(
         definitions,
         key_map,
         schema,

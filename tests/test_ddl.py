@@ -2,7 +2,7 @@
 
 import pytest
 
-from spectron.ddl import create_statement, create_table, indent_quoted, set_options
+from spectron.write_ddl import create_statement, create_table, indent_quoted, set_options
 
 
 @pytest.mark.parametrize(
