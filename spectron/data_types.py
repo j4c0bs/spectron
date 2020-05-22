@@ -3,6 +3,10 @@
 from functools import singledispatch
 
 
+def type_set(t: list):
+    return set(map(type, t))
+
+
 def int_in_bounds(num_bits, val):
     n_max = (2 ** num_bits) // 2
     if val > 0:

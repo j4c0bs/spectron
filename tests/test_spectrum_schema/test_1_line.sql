@@ -8,7 +8,7 @@ CREATE EXTERNAL TABLE {schema}.{table} (
 ROW FORMAT SERDE
     'org.openx.data.jsonserde.JsonSerDe'
 WITH SERDEPROPERTIES (
-    'case.insensitive'='TRUE',
+    'case.insensitive'='FALSE',
     'ignore.malformed.json'='TRUE'
 )
 STORED AS INPUTFORMAT

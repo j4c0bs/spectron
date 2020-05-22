@@ -2,6 +2,7 @@
 
 from itertools import takewhile
 import logging
+import sys
 
 try:
     import ujson as json
@@ -59,6 +60,23 @@ def _conform_syntax(d):
 # --------------------------------------------------------------------------------------
 
 
+def count_members(d):
+    total = 0
+    if d is not None:
+        if isinstance(d, dict):
+            total += len(d.keys())
+            for v in d.values():
+                total += count_members(v)
+        elif isinstance(d, list):
+            total += len(d)
+            for item in d:
+                if isinstance(item, dict):
+                    total += count_members(item)
+        else:
+            total += 1
+    return total
+
+
 def _as_parent_key(parent, key):
     """Construct parent key."""
 
@@ -67,17 +85,28 @@ def _as_parent_key(parent, key):
     return key
 
 
-def _inspect_array(array, parent, ignore_nested_arrarys):
-    """Check for nested arrays and report."""
+def validate_array(array, parent, ignore_nested_arrarys):
+    """Confirm array has single data type, no empty or nested arrays."""
 
-    num_arrays = sum(isinstance(item, list) for item in array)
+    if not array:
+        logger.warn(f"Skipping empty array in {parent}...")
+        return False
 
-    if num_arrays:
+    # confirm single dtype
+    if len(data_types.type_set(array)) > 1:
+        logger.warn(f"Skipping array with multiple dtypes in {parent}...")
+        return False
+
+    # check for nested arrays
+    if any(isinstance(item, list) for item in array):
         if ignore_nested_arrarys:
-            logger.warn(f"Skipping nested arrays ({num_arrays}) in {parent}...")
+            logger.warn(f"Skipping nested arrays ({len(array)}) in {parent}...")
+            return False
         else:
-            msg = f"Nested arrays detected ({num_arrays}) in {parent}..."
+            msg = f"Nested arrays detected ({len(array)}) in {parent}..."
             raise ValueError(msg)
+
+    return True
 
 
 def define_types(
@@ -86,27 +115,24 @@ def define_types(
     type_map=None,
     ignore_fields=None,
     convert_hyphens=False,
+    case_map=False,
     case_insensitive=False,
     ignore_nested_arrarys=True,
 ):
     """Replace values with data types and maintain data structure."""
 
-    if not mapping:
-        mapping = {}
-
-    if not type_map:
-        type_map = {}
-
-    if not ignore_fields:
-        ignore_fields = {}
-
     key_map = {}  # dict of confirmed keys to include in serde mapping
 
     def check_key_map(key):
+        """Check if key is in user defined map or has underscores converted."""
+
         nonlocal key_map
 
-        if (mapping and key in mapping) or ("-" in key and convert_hyphens):
-            if key in mapping:
+        check_map = mapping and key in mapping
+        check_hyphens = convert_hyphens and "-" in key
+
+        if check_map or check_hyphens:
+            if check_map:
                 new_key = mapping[key]
             else:
                 new_key = key.replace("-", "_")
@@ -116,27 +142,42 @@ def define_types(
         return key
 
     def parse_types(d, parent=None):
+        """Crawl and assign data types."""
 
         if isinstance(d, list):
             as_types = []
-
             parent_key = _as_parent_key(parent, "array")
-            _inspect_array(d, parent_key, ignore_nested_arrarys)
 
-            for item in d:
-                if isinstance(item, list):
-                    continue
-                as_types.append(parse_types(item, parent=parent_key))
+            if not validate_array(d, parent_key, ignore_nested_arrarys):
+                return None
+
+            if any(isinstance(item, dict) for item in d):
+                if len(d) == 1:
+                    single_dict = d[0]
+                else:
+                    single_dict = sorted(d, key=count_members, reverse=True)[0]
+
+                as_types.append(parse_types(single_dict, parent=parent_key))
+
+            else:
+                for item in d:
+                    if isinstance(item, list):
+                        continue
+                    as_types.append(parse_types(item, parent=parent_key))
+                as_types = sorted(set(as_types))
 
         elif isinstance(d, dict):
             as_types = {}
             for key, val in d.items():
-                if key in ignore_fields:
+                if ignore_fields and key in ignore_fields:
                     continue
 
                 parent_key = _as_parent_key(parent, key)
 
                 if case_insensitive:
+                    key = key.lower()
+                elif case_map and any(c.isupper() for c in key):
+                    key_map[key.lower()] = key
                     key = key.lower()
 
                 key = check_key_map(key)
@@ -146,11 +187,15 @@ def define_types(
                     key = f"`{key}`"
 
                 if key in reserved.keywords:
-                    logger.info(f"Enclosing reserved keyword in quotes: {key}")
+                    logger.info(f"Enclosing reserved keyword in quotes: {parent}.{key}")
                     key = f"`{key}`"
 
                 if isinstance(val, (dict, list)):
-                    as_types[key] = parse_types(val, parent=parent_key)
+                    dtype = parse_types(val, parent=parent_key)
+
+                    if dtype:
+                        as_types[key] = dtype
+
                 else:
                     if type_map and key in type_map:
                         dtype = type_map[key]
@@ -158,9 +203,9 @@ def define_types(
                         dtype = data_types.set_dtype(val)
 
                     if "UNKNOWN" in dtype:
-                        logger.warn(f"Unknown dtype for {key}: {val}")
-
-                    as_types[key] = dtype
+                        logger.warn(f"Unknown dtype for {parent_key}.{key}: {val}")
+                    else:
+                        as_types[key] = dtype
 
         else:
             as_types = data_types.set_dtype(d)
@@ -179,6 +224,7 @@ def format_definitions(
     type_map=None,
     ignore_fields=None,
     convert_hyphens=False,
+    case_map=False,
     case_insensitive=False,
     ignore_nested_arrarys=True,
 ):
@@ -190,12 +236,42 @@ def format_definitions(
         type_map=type_map,
         ignore_fields=ignore_fields,
         convert_hyphens=convert_hyphens,
+        case_map=case_map,
         case_insensitive=case_insensitive,
         ignore_nested_arrarys=ignore_nested_arrarys,
     )
 
+    if not with_types:
+        logger.warn("Aborting - input does not contain valid data structures...")
+        sys.exit(1)
+
     definitions = _conform_syntax(with_types)
     return definitions, key_map
+
+
+def validate_input(d):
+    """Check input type is dict|list."""
+
+    if not d:
+        raise ValueError("Input is empty...")
+
+    if not isinstance(d, (dict, list)):
+        raise ValueError("Invalid input type...")
+
+
+def loc_dict(d):
+    """Locate largest dict if list(dict) provided."""
+
+    if isinstance(d, list):
+        if all(isinstance(item, dict) for item in d):
+            if len(d) > 1:
+                d = sorted(d, key=count_members, reverse=True)[0]
+            else:
+                d = d[0]
+        else:
+            raise ValueError("Input list contains dtypes other than dict...")
+
+    return d
 
 
 def from_dict(
@@ -208,12 +284,16 @@ def from_dict(
     table=None,
     partitions=None,
     s3_key=None,
-    case_insensitive=True,
+    case_map=False,
+    case_insensitive=False,
     ignore_malformed_json=True,
     ignore_nested_arrarys=True,
     **kwargs,
 ):
     """Create Spectrum schema from dict."""
+
+    validate_input(d)
+    d = loc_dict(d)
 
     definitions, key_map = format_definitions(
         d,
@@ -221,6 +301,7 @@ def from_dict(
         type_map,
         ignore_fields,
         convert_hyphens,
+        case_map,
         case_insensitive,
         ignore_nested_arrarys,
     )
