@@ -3,7 +3,7 @@
 import json
 import pytest
 
-import spectron.ddl as ss
+from spectron import ddl
 
 
 def load_sql(path):
@@ -21,7 +21,7 @@ def test__from_dict__defaults(filename, datadir):
     result_path = datadir / f"{filename}.sql"
 
     d = load_json(input_path)
-    assert ss.from_dict(d).strip() == result_path.read_text().strip()
+    assert ddl.from_dict(d).strip() == result_path.read_text().strip()
 
 
 # --------------------------------------------------------------------------------------
@@ -39,7 +39,7 @@ def test__from_dict__defaults(filename, datadir):
     ],
 )
 def test__count_members(d, expected):
-    assert ss.count_members(d) == expected
+    assert ddl.count_members(d) == expected
 
 
 @pytest.mark.parametrize(
@@ -54,4 +54,4 @@ def test__count_members(d, expected):
     ],
 )
 def test__loc_dict(d, expected):
-    assert ss.loc_dict(d) == expected
+    assert ddl.loc_dict(d) == expected
