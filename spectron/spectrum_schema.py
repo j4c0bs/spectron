@@ -183,7 +183,7 @@ def define_types(
                     key = f"`{key}`"
 
                 if key in reserved.keywords:
-                    logger.info(f"Enclosing reserved keyword in quotes: {key}")
+                    logger.info(f"Enclosing reserved keyword in quotes: {parent}.{key}")
                     key = f"`{key}`"
 
                 if isinstance(val, (dict, list)):
@@ -199,9 +199,9 @@ def define_types(
                         dtype = data_types.set_dtype(val)
 
                     if "UNKNOWN" in dtype:
-                        logger.warn(f"Unknown dtype for {key}: {val}")
-
-                    as_types[key] = dtype
+                        logger.warn(f"Unknown dtype for {parent_key}.{key}: {val}")
+                    else:
+                        as_types[key] = dtype
 
         else:
             as_types = data_types.set_dtype(d)
