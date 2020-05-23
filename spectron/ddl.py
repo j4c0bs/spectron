@@ -1,173 +1,328 @@
 # -*- coding: utf-8 -*-
 
-from textwrap import indent
+from itertools import takewhile
+import logging
+import sys
+
+try:
+    import ujson as json
+except ImportError:
+    import json
+
+from . import data_types
+from . import write_ddl
+from . import reserved
 
 
-SERDE_FORMAT = "org.openx.data.jsonserde.JsonSerDe"
-INPUTFORMAT = "org.apache.hadoop.mapred.TextInputFormat"
-OUTPUTFORMAT = "org.apache.hadoop.hive.ql.io.IgnoreKeyTextOutputFormat"
+logger = logging.getLogger("spectron")
+
+# --------------------------------------------------------------------------------------
 
 
-def indent_quoted(s, n=1):
-    spc = " " * n * 4
-    return indent(f"'{s}'", spc)
+def _count_indent(line):
+    for _ in takewhile(lambda c: c == " ", line):
+        yield 1
 
 
-def create_table(definitions, schema=None, table=None):
-    """Construct `create table` statement in DDL.
-
-    Arg:
-        definitions (str):
-            - field name : dtype map
-    Kwargs:
-        schema (str):
-            - default: None
-            - schema to template
-        table (str):
-            - default: None
-            - table name to template
-
-    Returns: str
-    """
-
-    if not schema:
-        schema = "{schema}"
-    if not table:
-        table = "{table}"
-
-    create = f"CREATE EXTERNAL TABLE {schema}.{table}"
-
-    definitions = definitions.strip("\n")
-    if not definitions.startswith(" "):
-        definitions = indent(definitions, "    ")
-    return f"{create} (\n{definitions}\n)"
+def strip_top_level_seps(s):
+    lines = []
+    for line in s.split("\n"):
+        if sum(_count_indent(line)) == 4:
+            line = line.replace(":", " ")
+        lines.append(line)
+    return "\n".join(lines)
 
 
-def format_s3_key(s3_key):
-    if s3_key:
-        s3_key = s3_key.strip()
-        if not s3_key.startswith("s3://"):
-            s3_key = f"s3://{s3_key}"
-    else:
-        s3_key = "s3://{bucket}/{prefix}"
-    return s3_key
+def _conform_syntax(d):
+    """Replace Python syntax to match Spectrum DDL syntax."""
+
+    s = json.dumps(d, indent=4).strip()
+
+    # remove outermost brackets
+    s = s[1:][:-1]
+    s = s.rstrip()
+
+    # replace dict, lists with schema dtypes
+    s = s.replace("{", "struct<").replace("}", ">")
+    s = s.replace("[", "array<").replace("]", ">")
+
+    # drop colons in top level fields
+    s = strip_top_level_seps(s)
+
+    # add space after colon
+    s = s.replace(":", ": ")
+
+    # drop quotes, replace back-ticks
+    s = s.replace('"', "").replace("`", '"')
+    return s
 
 
-def format_partitions(partitions):
-    partition_by = ""
-    if partitions:
-        key_types = (f"{key} {dtype.upper()}" for (key, dtype) in partitions.items())
-        partition_by = f"PARTITIONED BY ({', '.join(key_types)})"
-    return partition_by
+# --------------------------------------------------------------------------------------
 
 
-def set_options(
-    key_map=None,
-    partitions=None,
-    s3_key=None,
-    case_insensitive=True,
-    ignore_malformed_json=True,
+def count_members(d):
+    total = 0
+    if d is not None:
+        if isinstance(d, dict):
+            total += len(d.keys())
+            for v in d.values():
+                total += count_members(v)
+        elif isinstance(d, list):
+            total += len(d)
+            for item in d:
+                if isinstance(item, dict):
+                    total += count_members(item)
+        else:
+            total += 1
+    return total
+
+
+def _as_parent_key(parent, key):
+    """Construct parent key."""
+
+    if parent:
+        return f"{parent}.{key}"
+    return key
+
+
+def validate_array(array, parent, ignore_nested_arrarys):
+    """Confirm array has single data type, no empty or nested arrays."""
+
+    if not array:
+        logger.warning(f"Skipping empty array in {parent}...")
+        return False
+
+    # confirm single dtype
+    if len(data_types.type_set(array)) > 1:
+        logger.warning(f"Skipping array with multiple dtypes in {parent}...")
+        return False
+
+    # check for nested arrays
+    if any(isinstance(item, list) for item in array):
+        if ignore_nested_arrarys:
+            logger.warning(f"Skipping nested arrays ({len(array)}) in {parent}...")
+            return False
+        else:
+            msg = f"Nested arrays detected ({len(array)}) in {parent}..."
+            raise ValueError(msg)
+
+    return True
+
+
+def define_types(
+    d,
+    mapping=None,
+    type_map=None,
+    ignore_fields=None,
+    convert_hyphens=False,
+    case_map=False,
+    case_insensitive=False,
+    ignore_nested_arrarys=True,
 ):
-    """Construct options statement in DDL.
+    """Replace values with data types and maintain data structure."""
 
-    Kwargs:
-        key_map (dict):
-            - default: None
-            - mapping for for column names
-        partitions (dict):
-            - default: None
-        s3_key (str):
-            - default: None
-            - S3 key prefix
-        case_insensitive (bool):
-            - default: True
-            - set all fields to lower case
-        ignore_malformed_json (bool):
-            - default: True
-            - instruct Spectrum to ignore bad JSON in data lake
+    key_map = {}  # dict of confirmed keys to include in serde mapping
 
-    Returns: str
-    """
+    def check_key_map(key, parent):
+        """Check if key is in user defined map or has underscores converted."""
 
-    bool_str = lambda b: "TRUE" if b else "FALSE"
+        nonlocal key_map
 
-    # OpenX Serde Properties
-    serde_properties = []
-    if key_map:
-        mappings = [f"'mapping.{key}'='{val}'" for key, val in key_map.items()]
-        serde_properties.extend(mappings)
+        use_key_map = mapping and key in mapping
+        use_case_map = case_map and any(c.isupper() for c in key)
+        replace_hyphens = convert_hyphens and "-" in key
 
-    case_option = f"'case.insensitive'='{bool_str(case_insensitive)}'"
-    serde_properties.append(case_option)
-    json_option = f"'ignore.malformed.json'='{bool_str(ignore_malformed_json)}'"
-    serde_properties.append(json_option)
-    serde_properties = ",\n".join(serde_properties)
+        if use_key_map or use_case_map or replace_hyphens:
+            if use_key_map:
+                mapped_key = mapping[key]
+            elif use_case_map:
+                mapped_key = key.lower()
+            else:
+                mapped_key = key.replace("-", "_")
 
-    statement = f"""
-{format_partitions(partitions)}
-ROW FORMAT SERDE
-{indent_quoted(SERDE_FORMAT)}
-WITH SERDEPROPERTIES (
-{indent(serde_properties, '    ')}
-)
-STORED AS INPUTFORMAT
-{indent_quoted(INPUTFORMAT)}
-OUTPUTFORMAT
-{indent_quoted(OUTPUTFORMAT)}
-LOCATION '{format_s3_key(s3_key)}';"""
+            key_map[mapped_key] = key
+            key = mapped_key
 
-    return statement.strip()
+        else:
+            if case_insensitive:
+                key = key.lower()
+
+            # replace back ticks with quotes after formatting
+            if not convert_hyphens and "-" in key:
+                key = f"`{key}`"
+
+            # reserved keywords must be enclosed in double quotes
+            if key.lower() in reserved.keywords:
+                logger.info(f"Reserved keyword detected: {parent}.{key}")
+                key = f"`{key}`"
+
+        return key
+
+    def parse_types(d, parent=None):
+        """Crawl and assign data types."""
+
+        if isinstance(d, list):
+            as_types = []
+            parent_key = _as_parent_key(parent, "array")
+
+            if not validate_array(d, parent_key, ignore_nested_arrarys):
+                return None
+
+            if any(isinstance(item, dict) for item in d):
+                if len(d) == 1:
+                    single_dict = d[0]
+                else:
+                    single_dict = sorted(d, key=count_members, reverse=True)[0]
+
+                as_types.append(parse_types(single_dict, parent=parent_key))
+
+            else:
+                for item in d:
+                    if isinstance(item, list):
+                        continue
+                    as_types.append(parse_types(item, parent=parent_key))
+                as_types = sorted(set(as_types))
+
+        elif isinstance(d, dict):
+            as_types = {}
+            for key, val in d.items():
+                if ignore_fields and key in ignore_fields:
+                    continue
+
+                dtype = None
+                parent_key = _as_parent_key(parent, key)
+
+                # set user defined dtype
+                if type_map and key in type_map:
+                    dtype = type_map[key]
+
+                key = check_key_map(key, parent)
+
+                if isinstance(val, (dict, list)):
+                    dtype = parse_types(val, parent=parent_key)
+                    if dtype:
+                        as_types[key] = dtype
+                else:
+                    if not dtype:
+                        dtype = data_types.set_dtype(val)
+
+                    # skip keys with unknown data types and log
+                    if "UNKNOWN" in dtype:
+                        _str_dtype = dtype.split("_", 1)[1]
+                        logger.warning(
+                            f"Unknown dtype {_str_dtype} for {parent_key}.{key}: {val}"
+                        )
+                    else:
+                        as_types[key] = dtype
+
+        else:
+            as_types = data_types.set_dtype(d)
+
+        return as_types
+
+    return parse_types(d), key_map
 
 
-def create_statement(
-    definitions,
-    key_map=None,
+# --------------------------------------------------------------------------------------
+
+
+def format_definitions(
+    d,
+    mapping=None,
+    type_map=None,
+    ignore_fields=None,
+    convert_hyphens=False,
+    case_map=False,
+    case_insensitive=False,
+    ignore_nested_arrarys=True,
+):
+    """Format field names and set dtypes."""
+
+    with_types, key_map = define_types(
+        d,
+        mapping=mapping,
+        type_map=type_map,
+        ignore_fields=ignore_fields,
+        convert_hyphens=convert_hyphens,
+        case_map=case_map,
+        case_insensitive=case_insensitive,
+        ignore_nested_arrarys=ignore_nested_arrarys,
+    )
+
+    if not with_types:
+        logger.warning("Aborting - input does not contain valid data structures...")
+        sys.exit(1)
+
+    definitions = _conform_syntax(with_types)
+    return definitions, key_map
+
+
+def validate_input(d):
+    """Check input type is dict|list."""
+
+    if not d:
+        raise ValueError("Input is empty...")
+
+    if not isinstance(d, (dict, list)):
+        raise ValueError("Invalid input type...")
+
+
+def loc_dict(d):
+    """Locate largest dict if list(dict) provided."""
+
+    if isinstance(d, list):
+        if all(isinstance(item, dict) for item in d):
+            if len(d) > 1:
+                d = sorted(d, key=count_members, reverse=True)[0]
+            else:
+                d = d[0]
+        else:
+            raise ValueError("Input list contains dtypes other than dict...")
+
+    return d
+
+
+def from_dict(
+    d,
+    mapping=None,
+    type_map=None,
+    ignore_fields=None,
+    convert_hyphens=False,
     schema=None,
     table=None,
     partitions=None,
     s3_key=None,
-    case_insensitive=True,
+    case_map=False,
+    case_insensitive=False,
     ignore_malformed_json=True,
+    ignore_nested_arrarys=True,
+    **kwargs,
 ):
-    """Construct Spectrum DDL.
+    """Create Spectrum schema from dict."""
 
-    Arg:
-        definitions (str):
-            - field name : dtype map
-    Kwargs:
-        schema (str):
-            - default: None
-            - schema to template
-        table (str):
-            - default: None
-            - table name to template
-        key_map (dict):
-            - default: None
-            - mapping for for column names
-        partitions (dict):
-            - default: None
-            - {column: dtype}
-        s3_key (str):
-            - default: None
-            - S3 key prefix
-        case_insensitive (bool):
-            - default: True
-            - set all fields to lower case
-        ignore_malformed_json (bool):
-            - default: True
-            - instruct Spectrum to ignore bad JSON in data lake
+    validate_input(d)
+    d = loc_dict(d)
 
-    Returns: str
-    """
-
-    create_external_table = create_table(definitions, schema, table)
-
-    options = set_options(
-        key_map=key_map,
-        partitions=partitions,
-        s3_key=s3_key,
-        case_insensitive=case_insensitive,
-        ignore_malformed_json=ignore_malformed_json,
+    definitions, key_map = format_definitions(
+        d,
+        mapping,
+        type_map,
+        ignore_fields,
+        convert_hyphens,
+        case_map,
+        case_insensitive,
+        ignore_nested_arrarys,
     )
 
-    return "\n".join((create_external_table, options))
+    statement = write_ddl.create_statement(
+        definitions,
+        key_map,
+        schema,
+        table,
+        partitions,
+        s3_key,
+        case_insensitive,
+        ignore_malformed_json,
+    )
+
+    return statement

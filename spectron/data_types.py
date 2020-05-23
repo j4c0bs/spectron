@@ -16,7 +16,7 @@ def int_in_bounds(num_bits, val):
 
 @singledispatch
 def set_dtype(val):
-    return f"UNKNOWN_TYPE__{type(val).__name__}"
+    return f"UNKNOWN_{type(val).__name__}"
 
 
 @set_dtype.register
