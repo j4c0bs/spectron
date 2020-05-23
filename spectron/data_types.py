@@ -2,6 +2,8 @@
 
 from functools import singledispatch
 
+from . import parse_date
+
 
 def type_set(t: list):
     return set(map(type, t))
@@ -15,17 +17,22 @@ def int_in_bounds(num_bits, val):
 
 
 @singledispatch
-def set_dtype(val):
+def set_dtype(val, **kwargs):
     return f"UNKNOWN_{type(val).__name__}"
 
 
 @set_dtype.register
-def __str_dtype(val: str):
+def __str_dtype(val: str, infer_date: bool = False):
+
+    if any(c.isdigit() for c in val):
+        dtype = parse_date.guess_type(val)
+        if dtype:
+            return dtype
     return "VARCHAR"
 
 
 @set_dtype.register
-def __float_dtype(val: float):
+def __float_dtype(val: float, **kwargs):
 
     num_bits = (64 - 15, 32 - 6)
     dtypes = ("FLOAT8", "FLOAT4")
@@ -38,7 +45,7 @@ def __float_dtype(val: float):
 
 
 @set_dtype.register
-def __int_dtype(val: int):
+def __int_dtype(val: int, **kwargs):
 
     if int_in_bounds(16, val):
         dtype = "SMALLINT"
@@ -52,5 +59,5 @@ def __int_dtype(val: int):
 
 
 @set_dtype.register
-def __bool_dtype(val: bool):
+def __bool_dtype(val: bool, **kwargs):
     return "BOOL"

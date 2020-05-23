@@ -22,6 +22,8 @@ spectron nested_big_data.json > nested_big_data.sql
 ---
 
 ```
+Generate Athena and Spectrum DDL from JSON
+
 positional arguments:
   infile                JSON to convert
 
@@ -32,27 +34,29 @@ optional arguments:
                         uppercase chars to lowercase
   -l, --lowercase       DDL: enable case insensitivity and force all fields to
                         lowercase - applied before field lookup in mapping
+  -d, --infer_date      infer date string types - supports ISO 8601 for date,
+                        datetime[TZ]
   -r, --retain_hyphens  disable auto convert hypens to underscores
   -e, --error_nested_arrarys
                         raise exception for nested arrays
-  -f IGNORE_FIELDS, --ignore_fields IGNORE_FIELDS
+  -f col1,col2,..., --ignore_fields col1,col2,...
                         Comma separated fields to ignore
-  -j, --ignore_malformed_json
-                        DDL: ignore malformed json
-  -m MAPPING_FILE, --mapping MAPPING_FILE
+  -m filepath, --mapping filepath
                         JSON filepath to use for mapping field names e.g.
                         {field_name: new_field_name}
-  -y TYPE_MAP_FILE, --type_map TYPE_MAP_FILE
+  -y filepath, --type_map filepath
                         JSON filepath to use for mapping field names to known
-                        data types e.g. {column: dtype}
-  -p PARTITIONS_FILE, --partitions_file PARTITIONS_FILE
+                        data types e.g. {key: value}
+  -p filepath, --partitions_file filepath
                         DDL: JSON filepath to map parition column(s) e.g.
                         {column: dtype}
-  -s SCHEMA, --schema SCHEMA
+  -j, --ignore_malformed_json
+                        DDL: ignore malformed json
+  -s schema, --schema schema
                         DDL: schema name
-  -t TABLE, --table TABLE
+  -t table, --table table
                         DDL: table name
-  --s3 S3_KEY           DDL: S3 Key prefix e.g. bucket/dir
+  --s3 s3://bucket/key  DDL: S3 Key prefix
 ```
 
 ## Options:
