@@ -1,4 +1,4 @@
-![Upload Python Package](https://github.com/j4c0bs/spectron/workflows/Upload%20Python%20Package/badge.svg)
+![Upload Python Package](https://github.com/j4c0bs/spectron/workflows/.github/workflows/pythonpublish.yml/badge.svg)
 
 # [WIP] spectron
 
