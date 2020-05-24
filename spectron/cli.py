@@ -75,6 +75,13 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "-d",
+        "--infer_date",
+        action="store_true",
+        help="infer date string types - supports ISO 8601 for date, datetime[TZ]",
+    )
+
+    parser.add_argument(
         "-r",
         "--retain_hyphens",
         action="store_false",
@@ -95,7 +102,34 @@ def parse_arguments():
         "--ignore_fields",
         type=str_list_type,
         dest="ignore_fields",
+        metavar="col1,col2,...",
         help="Comma separated fields to ignore",
+    )
+
+    parser.add_argument(
+        "-m",
+        "--mapping",
+        type=argparse.FileType("r"),
+        dest="mapping_file",
+        metavar="filepath",
+        help="JSON filepath to use for mapping field names e.g. {field_name: new_field_name}",
+    )
+    parser.add_argument(
+        "-y",
+        "--type_map",
+        type=argparse.FileType("r"),
+        dest="type_map_file",
+        metavar="filepath",
+        help="JSON filepath to use for mapping field names to known data types e.g. {key: value}",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--partitions_file",
+        type=argparse.FileType("r"),
+        dest="partitions_file",
+        metavar="filepath",
+        help="DDL: JSON filepath to map parition column(s) e.g. {column: dtype}",
     )
 
     parser.add_argument(
@@ -105,40 +139,30 @@ def parse_arguments():
         dest="ignore_malformed_json",
         help="DDL: ignore malformed json",
     )
-
     parser.add_argument(
-        "-m",
-        "--mapping",
-        type=argparse.FileType("r"),
-        dest="mapping_file",
-        help="JSON filepath to use for mapping field names e.g. {field_name: new_field_name}",
-    )
-    parser.add_argument(
-        "-y",
-        "--type_map",
-        type=argparse.FileType("r"),
-        dest="type_map_file",
-        help="JSON filepath to use for mapping field names to known data types e.g. {key: value}",
+        "-s",
+        "--schema",
+        type=str,
+        dest="schema",
+        metavar="schema",
+        help="DDL: schema name",
     )
 
     parser.add_argument(
-        "-p",
-        "--partitions_file",
-        type=argparse.FileType("r"),
-        dest="partitions_file",
-        help="DDL: JSON filepath to map parition column(s) e.g. {column: dtype}",
+        "-t",
+        "--table",
+        type=str,
+        dest="table",
+        metavar="table",
+        help="DDL: table name",
     )
 
     parser.add_argument(
-        "-s", "--schema", type=str, dest="schema", help="DDL: schema name",
-    )
-
-    parser.add_argument(
-        "-t", "--table", type=str, dest="table", help="DDL: table name",
-    )
-
-    parser.add_argument(
-        "--s3", type=str, dest="s3_key", help="DDL: S3 Key prefix e.g. bucket/dir",
+        "--s3",
+        type=str,
+        dest="s3_key",
+        metavar="s3://bucket/key",
+        help="DDL: S3 Key prefix",
     )
 
     args = parser.parse_args()

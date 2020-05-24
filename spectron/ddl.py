@@ -114,6 +114,7 @@ def define_types(
     mapping=None,
     type_map=None,
     ignore_fields=None,
+    infer_date=False,
     convert_hyphens=False,
     case_map=False,
     case_insensitive=False,
@@ -204,7 +205,7 @@ def define_types(
                         as_types[key] = dtype
                 else:
                     if not dtype:
-                        dtype = data_types.set_dtype(val)
+                        dtype = data_types.set_dtype(val, infer_date=infer_date)
 
                     # skip keys with unknown data types and log
                     if "UNKNOWN" in dtype:
@@ -216,7 +217,7 @@ def define_types(
                         as_types[key] = dtype
 
         else:
-            as_types = data_types.set_dtype(d)
+            as_types = data_types.set_dtype(d, infer_date=infer_date)
 
         return as_types
 
@@ -231,6 +232,7 @@ def format_definitions(
     mapping=None,
     type_map=None,
     ignore_fields=None,
+    infer_date=False,
     convert_hyphens=False,
     case_map=False,
     case_insensitive=False,
@@ -243,6 +245,7 @@ def format_definitions(
         mapping=mapping,
         type_map=type_map,
         ignore_fields=ignore_fields,
+        infer_date=infer_date,
         convert_hyphens=convert_hyphens,
         case_map=case_map,
         case_insensitive=case_insensitive,
@@ -287,6 +290,7 @@ def from_dict(
     mapping=None,
     type_map=None,
     ignore_fields=None,
+    infer_date=False,
     convert_hyphens=False,
     schema=None,
     table=None,
