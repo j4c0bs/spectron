@@ -57,7 +57,15 @@ def _conform_syntax(d):
     return s
 
 
-# Key Names ----------------------------------------------------------------------------
+# Keys ---------------------------------------------------------------------------------
+
+
+def _as_parent_key(parent, key):
+    """Construct parent key."""
+
+    if parent:
+        return f"{parent}.{key}"
+    return key
 
 
 def validate_identifier(key: str):
@@ -100,14 +108,6 @@ def count_members(d):
         else:
             total += 1
     return total
-
-
-def _as_parent_key(parent, key):
-    """Construct parent key."""
-
-    if parent:
-        return f"{parent}.{key}"
-    return key
 
 
 def validate_array(array, parent, ignore_nested_arrarys):
