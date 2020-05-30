@@ -24,6 +24,6 @@ def test__set_dtype(val, expected):
     assert set_dtype(val) == expected
 
 
-@pytest.mark.xfail(raises=ValueError)
 def test__set_dtype__out_of_bounds():
-    set_dtype(2 ** 64 // 2)
+    with pytest.raises(ValueError):
+        set_dtype(2 ** 64 // 2)
