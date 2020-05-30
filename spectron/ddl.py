@@ -57,6 +57,31 @@ def _conform_syntax(d):
     return s
 
 
+# Key Names ----------------------------------------------------------------------------
+
+
+def validate_identifier(key: str):
+    """Confirm key is valid identifier.
+        - between 1 and 127 bytes in length
+        - does not contain quotation marks
+        - starts with alphabetic or underscore character
+            * does not raise error, fixed in mapping
+    """
+
+    key = key.strip()
+
+    if not key:
+        raise ValueError("Column name is empty string...")
+
+    if len(key) > 127:
+        raise ValueError("Column name exceeds 127 characters...")
+
+    if "'" in key or '"' in key:
+        raise ValueError("Column name contains quotation marks...")
+
+    return key[0].isalpha() or key.startswith("_")
+
+
 # --------------------------------------------------------------------------------------
 
 

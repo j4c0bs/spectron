@@ -93,3 +93,23 @@ def test__loc_dict(d, expected):
 )
 def test__define_types(d, kwargs, expected):
     assert ddl.define_types(d, **kwargs) == expected
+
+
+# Test Key Ops -------------------------------------------------------------------------
+
+str_128_chars = "x" * 128
+
+
+@pytest.mark.parametrize(
+    "key, expected", [("0", False), ("x", True), ("_x", True), ("_0x", True),],
+)
+def test__valid_identifier(key, expected):
+    assert ddl.validate_identifier(key) == expected
+
+
+@pytest.mark.parametrize(
+    "key", [" ", "has'-'quotes", str_128_chars],
+)
+def test__valid_identifier__exceptions(key):
+    with pytest.raises(ValueError):
+        ddl.validate_identifier(key)
