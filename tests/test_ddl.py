@@ -113,3 +113,63 @@ def test__valid_identifier(key, expected):
 def test__valid_identifier__exceptions(key):
     with pytest.raises(ValueError):
         ddl.validate_identifier(key)
+
+
+# Test Conform Key ---------------------------------------------------------------------
+
+user_map = {
+    "table": "src_table",
+    "Table": "DEST_TABLE",
+    "col-x": "0-col-x",
+    "x-z-1": "1x-z",
+    "0x": "0x_invalid_key",
+    "1x": "1x-invalid-map",
+}
+
+
+@pytest.mark.parametrize(
+    "key, mapping, case_map, convert_hyphens, case_insensitive, expected",
+    [
+        ("x", {}, False, False, False, ("x", None)),
+        ("x", {}, True, True, False, ("x", None)),
+        # case_map
+        ("X", {}, True, False, False, ("X", "x")),
+        # case_insensitive
+        ("X", {}, False, False, True, ("x", None)),
+        # case_map + convert_hyphens
+        ("Col-Hyphen", {}, True, True, False, ("Col-Hyphen", "col_hyphen")),
+        # # check hyphens
+        ("col-x", {}, False, False, False, ("`col-x`", None),),
+        ("col-x", {}, False, True, False, ("col-x", "col_x"),),
+        ("col-x", user_map, False, False, False, ("col-x", "`_0-col-x`"),),
+        ("col-x", user_map, False, True, False, ("col-x", "_0_col_x"),),
+        ("col-x", user_map, True, False, False, ("col-x", "`_0-col-x`"),),
+        # check reserved keyword
+        ("table", None, False, False, False, ("`table`", None)),
+        ("table", user_map, False, False, False, ("table", "src_table")),
+        ("table", user_map, True, True, False, ("table", "src_table")),
+        # check case options with user map
+        ("Table", None, False, False, False, ("`Table`", None)),
+        ("Table", user_map, False, False, False, ("Table", "DEST_TABLE")),
+        ("Table", user_map, True, False, False, ("Table", "dest_table")),
+        ("Table", user_map, False, True, False, ("Table", "DEST_TABLE")),
+        ("Table", user_map, False, False, True, ("table", "dest_table")),
+        # # prefix invalid key with underscore
+        ("0x", user_map, False, False, False, ("0x", "_0x_invalid_key")),
+        ("1x", user_map, False, False, False, ("1x", "`_1x-invalid-map`")),
+    ],
+)
+def test__conform_key(
+    key, mapping, case_map, convert_hyphens, case_insensitive, expected
+):
+
+    # sanity check
+    assert not (case_map and case_insensitive)
+
+    proc_key, mapped_key = ddl.conform_key(
+        key, mapping, case_map, convert_hyphens, case_insensitive
+    )
+
+    expected_proc_key, expected_mapped_key = expected
+    assert proc_key == expected_proc_key
+    assert mapped_key == expected_mapped_key

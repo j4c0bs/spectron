@@ -90,6 +90,85 @@ def validate_identifier(key: str):
     return key[0].isalpha() or key.startswith("_")
 
 
+def detect_reserved_key(key, parent):
+    if key.strip("`").lower() in reserved.keywords:
+        logger.info(f"Reserved keyword detected: {parent}.{key}")
+
+
+def detect_hyphens(key: str, convert_hyphens: bool):
+    """Detect hyphens and enclose in quotes if located."""
+
+    if "-" in key:
+        if convert_hyphens:
+            key = key.replace("-", "_")
+        else:
+            key = f"`{key}`"
+    return key
+
+
+def conform_key(
+    key: str,
+    mapping: dict,
+    case_map: bool,
+    convert_hyphens: bool,
+    case_insensitive: bool,
+):
+    """Conform key to user options and standard identifier rules."""
+
+    mapped_key = None
+
+    use_key_map = mapping and key in mapping
+    replace_hyphens = convert_hyphens and "-" in key
+    use_case_map = case_map and any(c.isupper() for c in key)
+    is_reserved = key.lower() in reserved.keywords
+
+    if use_key_map or replace_hyphens or use_case_map:
+        if use_key_map:
+            mapped_key = mapping[key]
+            if case_map and any(c.isupper() for c in mapped_key):
+                mapped_key = mapped_key.lower()
+            if convert_hyphens and "-" in mapped_key:
+                mapped_key = mapped_key.replace("-", "_")
+        else:
+            if replace_hyphens:
+                mapped_key = key.replace("-", "_")
+            if case_map and not is_reserved:
+                src_key = mapped_key if mapped_key else key
+                if any(c.isupper() for c in src_key):
+                    mapped_key = src_key.lower()
+
+    if is_reserved and not mapped_key:
+        if case_insensitive:
+            key = key.lower()
+        key = f"`{key}`"
+        return key, mapped_key
+
+    # apply case fold to source column and user defined mapped key
+    if case_insensitive and not case_map:
+        key = key.lower()
+        if mapped_key:
+            mapped_key = mapped_key.lower()
+
+    # check for invalid keys and mutate key used in DDL
+    if mapped_key:
+        if not validate_identifier(mapped_key):
+            mapped_key = f"_{mapped_key}"
+    elif not validate_identifier(key):
+        mapped_key = f"_{key}"
+
+    # override user map and enclose hyphenated column name in quotes
+    if mapped_key:
+        mapped_key = detect_hyphens(mapped_key, convert_hyphens)
+    else:
+        key = detect_hyphens(key, convert_hyphens)
+
+    return key, mapped_key
+
+
+def process_keys(keys):
+    pass
+
+
 # --------------------------------------------------------------------------------------
 
 
