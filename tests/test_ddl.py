@@ -66,6 +66,12 @@ def test__loc_dict(d, expected):
         ({"a": 1}, {}, ({"a": "SMALLINT"}, {})),
         ({"a": 1}, {"mapping": {"a": "x"}}, ({"x": "SMALLINT"}, {"x": "a"})),
         ({"a": 1}, {"type_map": {"a": "TEST_TYPE"}}, ({"a": "TEST_TYPE"}, {})),
+        ({"10Ghz": 1.23}, {}, ({"_10Ghz": "FLOAT4"}, {"_10Ghz": "10Ghz"})),
+        (
+            {"10Ghz": 1.23},
+            {"case_map": True},
+            ({"_10ghz": "FLOAT4"}, {"_10ghz": "10ghz"}),
+        ),
         ({"a": 1, "b": 1}, {"ignore_fields": {"b"}}, ({"a": "SMALLINT"}, {})),
         ({"a-x": 1}, {"convert_hyphens": True}, ({"a_x": "SMALLINT"}, {"a_x": "a-x"})),
         ({"a-x": 1}, {"convert_hyphens": False}, ({"`a-x`": "SMALLINT"}, {})),

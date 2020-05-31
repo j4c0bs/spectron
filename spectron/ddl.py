@@ -165,8 +165,24 @@ def conform_key(
     return key, mapped_key
 
 
-def process_keys(keys):
-    pass
+def process_keys(
+    parent, keys, mapping, ignore_fields, case_map, convert_hyphens, case_insensitive
+):
+    """Apply key transforms and detect conflicts."""
+
+    args = (mapping, case_map, convert_hyphens, case_insensitive)
+
+    keys = [k for k in keys if not (ignore_fields and k in ignore_fields)]
+    proc_keys = {key: conform_key(key, *args) for key in keys}
+
+    new_keys = [k[1] if k[1] is not None else k[0] for k in proc_keys.values()]
+
+    # detect key conflict
+    if len(set(new_keys)) < len(keys):
+        conflicts = sorted(set(k for k in new_keys if new_keys.count(k) > 1))
+        raise ValueError(f"Key conflicts in {parent}: {', '.join(conflicts)}")
+
+    return proc_keys
 
 
 # --------------------------------------------------------------------------------------
@@ -228,43 +244,10 @@ def define_types(
 
     key_map = {}  # dict of confirmed keys to include in serde mapping
 
-    def check_key_map(key, parent):
-        """Check if key is in user defined map or has underscores converted."""
-
-        nonlocal key_map
-
-        use_key_map = mapping and key in mapping
-        use_case_map = case_map and any(c.isupper() for c in key)
-        replace_hyphens = convert_hyphens and "-" in key
-
-        if use_key_map or use_case_map or replace_hyphens:
-            if use_key_map:
-                mapped_key = mapping[key]
-            elif use_case_map:
-                mapped_key = key.lower()
-            else:
-                mapped_key = key.replace("-", "_")
-
-            key_map[mapped_key] = key
-            key = mapped_key
-
-        else:
-            if case_insensitive:
-                key = key.lower()
-
-            # replace back ticks with quotes after formatting
-            if not convert_hyphens and "-" in key:
-                key = f"`{key}`"
-
-            # reserved keywords must be enclosed in double quotes
-            if key.lower() in reserved.keywords:
-                logger.info(f"Reserved keyword detected: {parent}.{key}")
-                key = f"`{key}`"
-
-        return key
-
     def parse_types(d, parent=None):
         """Crawl and assign data types."""
+
+        nonlocal key_map
 
         if isinstance(d, list):
             as_types = []
@@ -290,23 +273,39 @@ def define_types(
 
         elif isinstance(d, dict):
             as_types = {}
+
+            proc_keys = process_keys(
+                parent,
+                d.keys(),
+                mapping,
+                ignore_fields,
+                case_map,
+                convert_hyphens,
+                case_insensitive,
+            )
+
             for key, val in d.items():
                 if ignore_fields and key in ignore_fields:
                     continue
 
                 dtype = None
                 parent_key = _as_parent_key(parent, key)
+                ref_key, mapped_key = proc_keys[key]
 
                 # set user defined dtype
                 if type_map and key in type_map:
                     dtype = type_map[key]
 
-                key = check_key_map(key, parent)
+                # add mapping to key_map
+                if mapped_key:
+                    key_map[mapped_key] = ref_key
+                    ref_key = mapped_key
 
+                # determine dtype and generate new dict
                 if isinstance(val, (dict, list)):
                     dtype = parse_types(val, parent=parent_key)
                     if dtype:
-                        as_types[key] = dtype
+                        as_types[ref_key] = dtype
                 else:
                     if not dtype:
                         dtype = data_types.set_dtype(val, infer_date=infer_date)
@@ -318,7 +317,7 @@ def define_types(
                             f"Unknown dtype {_str_dtype} for {parent_key}.{key}: {val}"
                         )
                     else:
-                        as_types[key] = dtype
+                        as_types[ref_key] = dtype
 
         else:
             as_types = data_types.set_dtype(d, infer_date=infer_date)
