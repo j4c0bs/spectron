@@ -299,13 +299,15 @@ def define_types(
                 # add mapping to key_map
                 if mapped_key:
                     key_map[mapped_key] = ref_key
-                    ref_key = mapped_key
+                    key = mapped_key
+                else:
+                    key = ref_key
 
                 # determine dtype and generate new dict
                 if isinstance(val, (dict, list)):
                     dtype = parse_types(val, parent=parent_key)
                     if dtype:
-                        as_types[ref_key] = dtype
+                        as_types[key] = dtype
                 else:
                     if not dtype:
                         dtype = data_types.set_dtype(val, infer_date=infer_date)
@@ -317,7 +319,7 @@ def define_types(
                             f"Unknown dtype {_str_dtype} for {parent_key}.{key}: {val}"
                         )
                     else:
-                        as_types[ref_key] = dtype
+                        as_types[key] = dtype
 
         else:
             as_types = data_types.set_dtype(d, infer_date=infer_date)

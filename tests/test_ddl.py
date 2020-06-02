@@ -70,7 +70,7 @@ def test__loc_dict(d, expected):
         (
             {"10Ghz": 1.23},
             {"case_map": True},
-            ({"_10ghz": "FLOAT4"}, {"_10ghz": "10ghz"}),
+            ({"_10ghz": "FLOAT4"}, {"_10ghz": "10Ghz"}),
         ),
         ({"a": 1, "b": 1}, {"ignore_fields": {"b"}}, ({"a": "SMALLINT"}, {})),
         ({"a-x": 1}, {"convert_hyphens": True}, ({"a_x": "SMALLINT"}, {"a_x": "a-x"})),
