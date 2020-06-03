@@ -5,6 +5,20 @@ from functools import singledispatch
 from . import parse_date
 
 
+map_redshift = {
+    "bigint": "BIGINT",
+    "boolean": "BOOL",
+    "character": "VARCHAR",
+    "character varying": "VARCHAR",
+    "date": "DATE",
+    "double precision": "FLOAT8",
+    "integer": "INT",
+    "numeric": "FLOAT8",
+    "smallint": "SMALLINT",
+    "timestamp without time zone": "TIMESTAMP",
+}
+
+
 def type_set(t: list):
     return set(map(type, t))
 

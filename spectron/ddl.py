@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from itertools import takewhile
 import logging
 import sys
+
+from functools import partial
+from itertools import takewhile
 
 try:
     import ujson as json
@@ -115,27 +117,16 @@ def conform_key(
 ):
     """Conform key to user options and standard identifier rules."""
 
+    if case_insensitive and case_map:
+        raise ValueError("case_insensitive and case_map both True...")
+
     mapped_key = None
 
     use_key_map = mapping and key in mapping
-    replace_hyphens = convert_hyphens and "-" in key
-    use_case_map = case_map and any(c.isupper() for c in key)
     is_reserved = key.lower() in reserved.keywords
 
-    if use_key_map or replace_hyphens or use_case_map:
-        if use_key_map:
-            mapped_key = mapping[key]
-            if case_map and any(c.isupper() for c in mapped_key):
-                mapped_key = mapped_key.lower()
-            if convert_hyphens and "-" in mapped_key:
-                mapped_key = mapped_key.replace("-", "_")
-        else:
-            if replace_hyphens:
-                mapped_key = key.replace("-", "_")
-            if case_map and not is_reserved:
-                src_key = mapped_key if mapped_key else key
-                if any(c.isupper() for c in src_key):
-                    mapped_key = src_key.lower()
+    if use_key_map:
+        mapped_key = mapping[key]
 
     if is_reserved and not mapped_key:
         if case_insensitive:
@@ -144,7 +135,13 @@ def conform_key(
         return key, mapped_key
 
     # apply case fold to source column and user defined mapped key
-    if case_insensitive and not case_map:
+    if case_map:
+        if mapped_key:
+            if any(c.isupper() for c in mapped_key):
+                mapped_key = mapped_key.lower()
+        elif any(c.isupper() for c in key):
+            mapped_key = key.lower()
+    elif case_insensitive:
         key = key.lower()
         if mapped_key:
             mapped_key = mapped_key.lower()
@@ -160,20 +157,37 @@ def conform_key(
     if mapped_key:
         mapped_key = detect_hyphens(mapped_key, convert_hyphens)
     else:
-        key = detect_hyphens(key, convert_hyphens)
+        proc_key = detect_hyphens(key, convert_hyphens)
+        if proc_key.strip("`") != key:
+            mapped_key = proc_key
+        else:
+            key = proc_key
 
     return key, mapped_key
 
 
 def process_keys(
-    parent, keys, mapping, ignore_fields, case_map, convert_hyphens, case_insensitive
+    parent,
+    keys,
+    mapping,
+    ignore_fields,
+    case_map,
+    convert_hyphens,
+    case_insensitive,
+    **kwargs,
 ):
     """Apply key transforms and detect conflicts."""
 
-    args = (mapping, case_map, convert_hyphens, case_insensitive)
+    conform = partial(
+        conform_key,
+        mapping=mapping,
+        case_map=case_map,
+        convert_hyphens=convert_hyphens,
+        case_insensitive=case_insensitive,
+    )
 
     keys = [k for k in keys if not (ignore_fields and k in ignore_fields)]
-    proc_keys = {key: conform_key(key, *args) for key in keys}
+    proc_keys = {key: conform(key) for key in keys}
 
     new_keys = [k[1] if k[1] is not None else k[0] for k in proc_keys.values()]
 
@@ -244,6 +258,17 @@ def define_types(
 
     key_map = {}  # dict of confirmed keys to include in serde mapping
 
+    kwargs = {
+        "mapping": mapping,
+        "type_map": type_map,
+        "ignore_fields": ignore_fields,
+        "infer_date": infer_date,
+        "convert_hyphens": convert_hyphens,
+        "case_map": case_map,
+        "case_insensitive": case_insensitive,
+        "ignore_nested_arrarys": ignore_nested_arrarys,
+    }
+
     def parse_types(d, parent=None):
         """Crawl and assign data types."""
 
@@ -274,15 +299,7 @@ def define_types(
         elif isinstance(d, dict):
             as_types = {}
 
-            proc_keys = process_keys(
-                parent,
-                d.keys(),
-                mapping,
-                ignore_fields,
-                case_map,
-                convert_hyphens,
-                case_insensitive,
-            )
+            proc_keys = process_keys(parent, d.keys(), **kwargs)
 
             for key, val in d.items():
                 if ignore_fields and key in ignore_fields:
@@ -295,6 +312,9 @@ def define_types(
                 # set user defined dtype
                 if type_map and key in type_map:
                     dtype = type_map[key]
+
+                    if dtype.lower() in data_types.map_redshift:
+                        dtype = data_types.map_redshift[dtype.lower()]
 
                 # add mapping to key_map
                 if mapped_key:
