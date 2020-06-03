@@ -434,13 +434,13 @@ def from_dict(
 
     definitions, key_map = format_definitions(
         d,
-        mapping,
-        type_map,
-        ignore_fields,
-        convert_hyphens,
-        case_map,
-        case_insensitive,
-        ignore_nested_arrarys,
+        mapping=mapping,
+        type_map=type_map,
+        ignore_fields=ignore_fields,
+        convert_hyphens=convert_hyphens,
+        case_map=case_map,
+        case_insensitive=case_insensitive,
+        ignore_nested_arrarys=ignore_nested_arrarys,
     )
 
     statement = write_ddl.create_statement(
