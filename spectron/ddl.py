@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-from itertools import takewhile
 import logging
 import sys
+
+from functools import partial
+from itertools import takewhile
 
 try:
     import ujson as json
@@ -57,6 +59,146 @@ def _conform_syntax(d):
     return s
 
 
+# Keys ---------------------------------------------------------------------------------
+
+
+def _as_parent_key(parent, key):
+    """Construct parent key."""
+
+    if parent:
+        return f"{parent}.{key}"
+    return key
+
+
+def validate_identifier(key: str):
+    """Confirm key is valid identifier.
+        - between 1 and 127 bytes in length
+        - does not contain quotation marks
+        - starts with alphabetic or underscore character
+            * does not raise error, fixed in mapping
+    """
+
+    key = key.strip()
+
+    if not key:
+        raise ValueError("Column name is empty string...")
+
+    if len(key) > 127:
+        raise ValueError("Column name exceeds 127 characters...")
+
+    if "'" in key or '"' in key:
+        raise ValueError("Column name contains quotation marks...")
+
+    return key[0].isalpha() or key.startswith("_")
+
+
+def detect_reserved_key(key, parent):
+    if key.strip("`").lower() in reserved.keywords:
+        logger.info(f"Reserved keyword detected: {parent}.{key}")
+
+
+def detect_hyphens(key: str, convert_hyphens: bool):
+    """Detect hyphens and enclose in quotes if located."""
+
+    if "-" in key:
+        if convert_hyphens:
+            key = key.replace("-", "_")
+        else:
+            key = f"`{key}`"
+    return key
+
+
+def conform_key(
+    key: str,
+    mapping: dict,
+    case_map: bool,
+    convert_hyphens: bool,
+    case_insensitive: bool,
+):
+    """Conform key to user options and standard identifier rules."""
+
+    if case_insensitive and case_map:
+        raise ValueError("case_insensitive and case_map both True...")
+
+    mapped_key = None
+
+    use_key_map = mapping and key in mapping
+    is_reserved = key.lower() in reserved.keywords
+
+    if use_key_map:
+        mapped_key = mapping[key]
+
+    if is_reserved and not mapped_key:
+        if case_insensitive:
+            key = key.lower()
+        key = f"`{key}`"
+        return key, mapped_key
+
+    # apply case fold to source column and user defined mapped key
+    if case_map:
+        if mapped_key:
+            if any(c.isupper() for c in mapped_key):
+                mapped_key = mapped_key.lower()
+        elif any(c.isupper() for c in key):
+            mapped_key = key.lower()
+    elif case_insensitive:
+        key = key.lower()
+        if mapped_key:
+            mapped_key = mapped_key.lower()
+
+    # check for invalid keys and mutate key used in DDL
+    if mapped_key:
+        if not validate_identifier(mapped_key):
+            mapped_key = f"_{mapped_key}"
+    elif not validate_identifier(key):
+        mapped_key = f"_{key}"
+
+    # override user map and enclose hyphenated column name in quotes
+    if mapped_key:
+        mapped_key = detect_hyphens(mapped_key, convert_hyphens)
+    else:
+        proc_key = detect_hyphens(key, convert_hyphens)
+        if proc_key.strip("`") != key:
+            mapped_key = proc_key
+        else:
+            key = proc_key
+
+    return key, mapped_key
+
+
+def process_keys(
+    parent,
+    keys,
+    mapping,
+    ignore_fields,
+    case_map,
+    convert_hyphens,
+    case_insensitive,
+    **kwargs,
+):
+    """Apply key transforms and detect conflicts."""
+
+    conform = partial(
+        conform_key,
+        mapping=mapping,
+        case_map=case_map,
+        convert_hyphens=convert_hyphens,
+        case_insensitive=case_insensitive,
+    )
+
+    keys = [k for k in keys if not (ignore_fields and k in ignore_fields)]
+    proc_keys = {key: conform(key) for key in keys}
+
+    new_keys = [k[1] if k[1] is not None else k[0] for k in proc_keys.values()]
+
+    # detect key conflict
+    if len(set(new_keys)) < len(keys):
+        conflicts = sorted(set(k for k in new_keys if new_keys.count(k) > 1))
+        raise ValueError(f"Key conflicts in {parent}: {', '.join(conflicts)}")
+
+    return proc_keys
+
+
 # --------------------------------------------------------------------------------------
 
 
@@ -75,14 +217,6 @@ def count_members(d):
         else:
             total += 1
     return total
-
-
-def _as_parent_key(parent, key):
-    """Construct parent key."""
-
-    if parent:
-        return f"{parent}.{key}"
-    return key
 
 
 def validate_array(array, parent, ignore_nested_arrarys):
@@ -124,43 +258,21 @@ def define_types(
 
     key_map = {}  # dict of confirmed keys to include in serde mapping
 
-    def check_key_map(key, parent):
-        """Check if key is in user defined map or has underscores converted."""
-
-        nonlocal key_map
-
-        use_key_map = mapping and key in mapping
-        use_case_map = case_map and any(c.isupper() for c in key)
-        replace_hyphens = convert_hyphens and "-" in key
-
-        if use_key_map or use_case_map or replace_hyphens:
-            if use_key_map:
-                mapped_key = mapping[key]
-            elif use_case_map:
-                mapped_key = key.lower()
-            else:
-                mapped_key = key.replace("-", "_")
-
-            key_map[mapped_key] = key
-            key = mapped_key
-
-        else:
-            if case_insensitive:
-                key = key.lower()
-
-            # replace back ticks with quotes after formatting
-            if not convert_hyphens and "-" in key:
-                key = f"`{key}`"
-
-            # reserved keywords must be enclosed in double quotes
-            if key.lower() in reserved.keywords:
-                logger.info(f"Reserved keyword detected: {parent}.{key}")
-                key = f"`{key}`"
-
-        return key
+    kwargs = {
+        "mapping": mapping,
+        "type_map": type_map,
+        "ignore_fields": ignore_fields,
+        "infer_date": infer_date,
+        "convert_hyphens": convert_hyphens,
+        "case_map": case_map,
+        "case_insensitive": case_insensitive,
+        "ignore_nested_arrarys": ignore_nested_arrarys,
+    }
 
     def parse_types(d, parent=None):
         """Crawl and assign data types."""
+
+        nonlocal key_map
 
         if isinstance(d, list):
             as_types = []
@@ -186,19 +298,32 @@ def define_types(
 
         elif isinstance(d, dict):
             as_types = {}
+
+            proc_keys = process_keys(parent, d.keys(), **kwargs)
+
             for key, val in d.items():
                 if ignore_fields and key in ignore_fields:
                     continue
 
                 dtype = None
                 parent_key = _as_parent_key(parent, key)
+                ref_key, mapped_key = proc_keys[key]
 
                 # set user defined dtype
                 if type_map and key in type_map:
                     dtype = type_map[key]
 
-                key = check_key_map(key, parent)
+                    if dtype.lower() in data_types.map_redshift:
+                        dtype = data_types.map_redshift[dtype.lower()]
 
+                # add mapping to key_map
+                if mapped_key:
+                    key_map[mapped_key] = ref_key
+                    key = mapped_key
+                else:
+                    key = ref_key
+
+                # determine dtype and generate new dict
                 if isinstance(val, (dict, list)):
                     dtype = parse_types(val, parent=parent_key)
                     if dtype:
@@ -309,13 +434,13 @@ def from_dict(
 
     definitions, key_map = format_definitions(
         d,
-        mapping,
-        type_map,
-        ignore_fields,
-        convert_hyphens,
-        case_map,
-        case_insensitive,
-        ignore_nested_arrarys,
+        mapping=mapping,
+        type_map=type_map,
+        ignore_fields=ignore_fields,
+        convert_hyphens=convert_hyphens,
+        case_map=case_map,
+        case_insensitive=case_insensitive,
+        ignore_nested_arrarys=ignore_nested_arrarys,
     )
 
     statement = write_ddl.create_statement(
