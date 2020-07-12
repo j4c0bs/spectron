@@ -38,8 +38,8 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     python_requires=">=3.7",
     install_requires=requirements,
-    tests_require = ["pytest", "pytest-datadir"],
-    extras_require={"json": "ujson>=1.35"},
+    tests_require=["pytest", "pytest-datadir"],
+    extras_require={"json": "ujson==1.35"},
     include_package_data=False,
     classifiers=[
         "Intended Audience :: Developers",

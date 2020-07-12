@@ -1,22 +1,98 @@
 # -*- coding: utf-8 -*-
 
+from enum import IntEnum, auto
 from functools import singledispatch
 
 from . import parse_date
 
 
-map_redshift = {
+REDSHIFT_MAP = {
+    "int2": "SMALLINT",
+    "smallint": "SMALLINT",
+    "int": "INT",
+    "int4": "INT",
+    "integer": "INT",
+    "int8": "BIGINT",
     "bigint": "BIGINT",
+    "real": "FLOAT4",
+    "float": "FLOAT8",
+    "double precision": "FLOAT8",
     "boolean": "BOOL",
     "character": "VARCHAR",
     "character varying": "VARCHAR",
     "date": "DATE",
-    "double precision": "FLOAT8",
-    "integer": "INT",
-    "numeric": "FLOAT8",
-    "smallint": "SMALLINT",
     "timestamp without time zone": "TIMESTAMP",
 }
+
+REDSHIFT_ALIAS = set(REDSHIFT_MAP.values())
+
+
+class Numeric(IntEnum):
+    SMALLINT = auto()
+    INT = auto()
+    BIGINT = auto()
+    FLOAT4 = auto()
+    FLOAT8 = auto()
+
+
+DATETIME_TYPES = {"DATE", "TIMESTAMP"}
+NUMERIC_TYPES = set(Numeric.__members__.keys())
+
+
+def largest_numeric_type(*dtypes: str) -> str:
+    """Get dtype with largest range."""
+
+    num_type = max((getattr(Numeric, dtype) for dtype in dtypes))
+    return num_type.name
+
+
+def resolve_type(inferred_dtype: str, user_dtype: str) -> str:
+    """Detect and resolve data type when inferred != user provided.
+
+    Rules (inferred vs. user defined):
+        string / varchar > all:
+            - override all dtypes except for date/time
+        numeric > all numeric:
+            - user defined numeric(x,y) types override int, float
+            - other inferred dtypes override user defined
+        int < bool:
+            - user defined bool replaces inferred int
+        int < float:
+            - user defined float is used since spectrum supports int to float
+        int <-> int:
+            - largest int type is used
+        float <-> float:
+            - largest float type is used
+    """
+
+    dtype = None
+
+    if inferred_dtype == "VARCHAR":
+        if user_dtype in DATETIME_TYPES:
+            dtype = user_dtype
+        else:
+            dtype = inferred_dtype
+    elif "NUMERIC" in user_dtype or "DECIMAL" in user_dtype:
+        if inferred_dtype in NUMERIC_TYPES:
+            dtype = user_dtype
+        else:
+            dtype = inferred_dtype
+    elif "INT" in inferred_dtype:
+        if user_dtype == "BOOL" or "FLOAT" in user_dtype:
+            dtype = user_dtype
+        elif "INT" in user_dtype:
+            dtype = largest_numeric_type(inferred_dtype, user_dtype)
+        else:
+            dtype = inferred_dtype
+    elif "FLOAT" in inferred_dtype:
+        if "FLOAT" in user_dtype:
+            dtype = largest_numeric_type(inferred_dtype, user_dtype)
+        else:
+            dtype = inferred_dtype
+    else:
+        dtype = user_dtype
+
+    return dtype
 
 
 def type_set(t: list):

@@ -42,21 +42,6 @@ def test__count_members(d, expected):
     assert ddl.count_members(d) == expected
 
 
-@pytest.mark.parametrize(
-    "d, expected",
-    [
-        ({}, {}),
-        ([{"a": 1}, {"a": 1, "b": 2}], {"a": 1, "b": 2}),
-        (
-            [{"a": 1}, {"a": 1, "b": 2}, {"a": 1, "b": 2, "c": {"c1": 1}}],
-            {"a": 1, "b": 2, "c": {"c1": 1}},
-        ),
-    ],
-)
-def test__loc_dict(d, expected):
-    assert ddl.loc_dict(d) == expected
-
-
 # Test Define Types --------------------------------------------------------------------
 
 
@@ -65,7 +50,7 @@ def test__loc_dict(d, expected):
     [
         ({"a": 1}, {}, ({"a": "SMALLINT"}, {})),
         ({"a": 1}, {"mapping": {"a": "x"}}, ({"x": "SMALLINT"}, {"x": "a"})),
-        ({"a": 1}, {"type_map": {"a": "TEST_TYPE"}}, ({"a": "TEST_TYPE"}, {})),
+        ({"a": 1}, {"type_map": {"a": "TEST_TYPE"}}, ({"a": "SMALLINT"}, {})),
         ({"10Ghz": 1.23}, {}, ({"_10Ghz": "FLOAT4"}, {"_10Ghz": "10Ghz"})),
         (
             {"10Ghz": 1.23},
@@ -93,7 +78,7 @@ def test__loc_dict(d, expected):
         (
             {"A": 1},
             {"type_map": {"A": "TEST_TYPE"}, "case_map": True},
-            ({"a": "TEST_TYPE"}, {"a": "A"}),
+            ({"a": "SMALLINT"}, {"a": "A"}),
         ),
     ],
 )
@@ -107,14 +92,15 @@ str_128_chars = "x" * 128
 
 
 @pytest.mark.parametrize(
-    "key, expected", [("0", False), ("x", True), ("_x", True), ("_0x", True),],
+    "key, expected",
+    [("0", False), ("x", True), ("_x", True), ("_0x", True), ("some_key", True)],
 )
 def test__valid_identifier(key, expected):
     assert ddl.validate_identifier(key) == expected
 
 
 @pytest.mark.parametrize(
-    "key", [" ", "has'-'quotes", str_128_chars],
+    "key", ["", " ", "has'-'quotes", str_128_chars],
 )
 def test__valid_identifier__exceptions(key):
     with pytest.raises(ValueError):

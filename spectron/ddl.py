@@ -12,11 +12,11 @@ except ImportError:
     import json
 
 from . import data_types
-from . import write_ddl
 from . import reserved
+from . import write_ddl
 
 
-logger = logging.getLogger("spectron")
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------------------------
 
@@ -223,18 +223,21 @@ def validate_array(array, parent, ignore_nested_arrarys):
     """Confirm array has single data type, no empty or nested arrays."""
 
     if not array:
-        logger.warning(f"Skipping empty array in {parent}...")
+        logger.warning(f"[{parent}] Ignoring empty array")
         return False
 
     # confirm single dtype
-    if len(data_types.type_set(array)) > 1:
-        logger.warning(f"Skipping array with multiple dtypes in {parent}...")
+    _num_dtypes = len(data_types.type_set(array))
+    if _num_dtypes > 1:
+        logger.warning(
+            f"[{parent}] Ignoring array with multiple dtypes ({_num_dtypes})"
+        )
         return False
 
     # check for nested arrays
     if any(isinstance(item, list) for item in array):
         if ignore_nested_arrarys:
-            logger.warning(f"Skipping nested arrays ({len(array)}) in {parent}...")
+            logger.warning(f"[{parent}] Ignoring nested arrays ({len(array)})")
             return False
         else:
             msg = f"Nested arrays detected ({len(array)}) in {parent}..."
@@ -311,10 +314,12 @@ def define_types(
 
                 # set user defined dtype
                 if type_map and key in type_map:
-                    dtype = type_map[key]
+                    dtype = type_map[key].strip()
 
-                    if dtype.lower() in data_types.map_redshift:
-                        dtype = data_types.map_redshift[dtype.lower()]
+                    if dtype.lower() in data_types.REDSHIFT_MAP:
+                        dtype = data_types.REDSHIFT_MAP[dtype.lower()]
+                    elif dtype.upper() in data_types.REDSHIFT_ALIAS:
+                        dtype = dtype.upper()
 
                 # add mapping to key_map
                 if mapped_key:
@@ -329,14 +334,25 @@ def define_types(
                     if dtype:
                         as_types[key] = dtype
                 else:
-                    if not dtype:
-                        dtype = data_types.set_dtype(val, infer_date=infer_date)
+                    inferred_dtype = data_types.set_dtype(val, infer_date=infer_date)
+
+                    # detect dtype mismatch between inferred and user provided
+                    if dtype and dtype != inferred_dtype:
+                        user_dtype = dtype[:]
+                        dtype = data_types.resolve_type(inferred_dtype, user_dtype)
+
+                        if dtype != user_dtype:
+                            logger.warning(
+                                f"[{parent_key}] Using {dtype} instead of {user_dtype}"
+                            )
+                    else:
+                        dtype = inferred_dtype
 
                     # skip keys with unknown data types and log
                     if "UNKNOWN" in dtype:
                         _str_dtype = dtype.split("_", 1)[1]
                         logger.warning(
-                            f"Unknown dtype {_str_dtype} for {parent_key}.{key}: {val}"
+                            f"Unknown dtype {_str_dtype} for {parent_key}: {val}"
                         )
                     else:
                         as_types[key] = dtype
@@ -395,21 +411,6 @@ def validate_input(d):
         raise ValueError("Invalid input type...")
 
 
-def loc_dict(d):
-    """Locate largest dict if list(dict) provided."""
-
-    if isinstance(d, list):
-        if all(isinstance(item, dict) for item in d):
-            if len(d) > 1:
-                d = sorted(d, key=count_members, reverse=True)[0]
-            else:
-                d = d[0]
-        else:
-            raise ValueError("Input list contains dtypes other than dict...")
-
-    return d
-
-
 def from_dict(
     d,
     mapping=None,
@@ -430,7 +431,6 @@ def from_dict(
     """Create Spectrum schema from dict."""
 
     validate_input(d)
-    d = loc_dict(d)
 
     definitions, key_map = format_definitions(
         d,

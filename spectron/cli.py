@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import io
 import logging
+
 from pathlib import Path
-import sys
+from typing import Dict, List
 
 try:
     import ujson as json
@@ -12,15 +14,15 @@ except ImportError:
 
 from . import __version__ as version
 from . import ddl
+from .MaxDict import MaxDict
 
 
 logging.basicConfig(
-    level=logging.WARN,
-    format="-- [%(asctime)s][%(levelname)s][%(filename)s] - %(message)s",
+    format="-- [%(asctime)s][%(levelname)s][%(name)s] - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-logger = logging.getLogger("spectron")
+logger = logging.getLogger(__name__)
 
 
 def str_list_type(input):
@@ -32,7 +34,7 @@ def str_list_type(input):
     return val
 
 
-def json_type(input):
+def json_type(input: str):
     d = json.loads(Path(input))
     return tuple(d.items())
 
@@ -46,14 +48,16 @@ def parse_arguments():
 
     parser.set_defaults(partitions=None, mapping=None, type_map=None)
 
-    parser.add_argument("-v", "--version", action="version", version=version)
+    parser.add_argument("-V", "--version", action="version", version=version)
+    parser.add_argument(
+        "-v", "--verbose", action="count", help="increase logging level"
+    )
 
     parser.add_argument(
         dest="infile",
         type=argparse.FileType("r"),
-        nargs="?",
-        default=sys.stdin,
-        help="JSON to convert",
+        nargs="+",
+        help="JSON files to convert",
     )
 
     case_group = parser.add_mutually_exclusive_group()
@@ -176,14 +180,48 @@ def parse_arguments():
     if args.type_map_file:
         args.type_map = json.loads(args.type_map_file.read())
 
+    if not args.verbose:
+        logger.setLevel(logging.WARN)
+    elif args.verbose == 1:
+        logger.setLevel(logging.INFO)
+    elif args.verbose > 1:
+        logger.setLevel(logging.DEBUG)
+
     return args
+
+
+def load_dict_from_infiles(infiles: List[io.TextIOWrapper]) -> Dict:
+    """Load JSON infile(s) as dict | max dict.
+    If > 1 files or any input is a list of dicts, max dict is used as schema source.
+    """
+
+    if len(infiles) == 1:
+        d = json.loads(infiles[0].read())
+        if isinstance(d, dict):
+            return d
+        else:
+            infiles[0].seek(0)
+
+    md = MaxDict()
+    for infile in infiles:
+        d = json.loads(infile.read())
+
+        if isinstance(d, dict):
+            md.load_dict(d)
+        elif isinstance(d, list) and all(isinstance(sd, dict) for sd in d):
+            md.batch_load_dicts(d)
+        else:
+            raise ValueError("Unsupported input, type must be dict or [dict,]...")
+
+    return md.asdict()
 
 
 def create_spectrum_schema():
     """Create Spectrum schema from JSON."""
 
     args = parse_arguments()
-    d = json.loads(args.infile.read())
+    d = load_dict_from_infiles(args.infile)
+
     kwargs = {k: v for (k, v) in args._get_kwargs()}
     statement = ddl.from_dict(d, **kwargs)
     print(statement)
