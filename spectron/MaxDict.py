@@ -27,8 +27,12 @@ class Field:
         self.is_numeric = False
         self._add_next_value = None
         self.hist = defaultdict(int)
-        self.dtype = self._set_dtype(value)
+        self._dtype = self._set_dtype(value)
         self.add(value)
+
+    @property
+    def dtype(self):
+        return self._dtype
 
     def _set_dtype(self, value):
         if value is not None:
@@ -50,15 +54,15 @@ class Field:
         _prev_value = self.max_value
 
         if self.dtype_change:
-            if self.dtype in self.dtype_change:
-                prev = self.dtype_change[self.dtype]
-                if self.dtype == "str":
+            if self._dtype in self.dtype_change:
+                prev = self.dtype_change[self._dtype]
+                if self._dtype == "str":
                     _prev_value = max(prev, self.max_value)
-                elif self.dtype in self.numeric_types:
+                elif self._dtype in self.numeric_types:
                     _prev_value = max(prev, abs(self.max_value))
 
-        self.dtype_change[self.dtype] = _prev_value
-        self.dtype = self._set_dtype(value)
+        self.dtype_change[self._dtype] = _prev_value
+        self._dtype = self._set_dtype(value)
         self.max_value = None
 
     def _valid_type(self, value):
@@ -66,15 +70,15 @@ class Field:
 
         v_dtype = type(value).__name__
 
-        if self.dtype:
-            if v_dtype == self.dtype:
+        if self._dtype:
+            if v_dtype == self._dtype:
                 return True
             elif v_dtype in self.numeric_types and self.is_numeric:
                 return True
             else:
                 self._store_dtype_change(value)
         else:
-            self.dtype = self._set_dtype(value)
+            self._dtype = self._set_dtype(value)
         return False
 
     def add(self, value):
@@ -82,7 +86,7 @@ class Field:
         if value is not None:
             self._valid_type(value)
             self._add_next_value(value)
-            self.hist[self.dtype] += 1
+            self.hist[self._dtype] += 1
         else:
             self.num_na += 1
 
