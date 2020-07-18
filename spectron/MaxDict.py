@@ -19,8 +19,9 @@ class Field:
 
     numeric_types = {"int", "float"}
 
-    def __init__(self, parent_key: str, value=None):
+    def __init__(self, parent_key: str, value=None, *, str_numeric_override=False):
         self.parent_key = parent_key
+        self.str_numeric_override = str_numeric_override
         self.num_na = 0
         self.dtype_change = {}
         self.max_value = None
@@ -32,9 +33,36 @@ class Field:
 
     @property
     def dtype(self):
-        return self._dtype
+        """Get data type with highest count.
+
+        If `str_numeric_override` is enabled and any strings have been seen, returned
+        dtype is forced as str.
+        """
+
+        if not self.hist:
+            return None
+
+        dtype = None
+        if self.str_numeric_override and "str" in self.hist:
+            ref_types = self.numeric_types & self.hist.keys()
+            if ref_types:
+                dtype = "str"
+
+                if isinstance(self.parent_key, tuple):
+                    ref_par_key = ".".join(self.parent_key)
+                else:
+                    ref_par_key = self.parent_key
+                logger.warning(
+                    f"[{ref_par_key}] mixed str and numeric dtypes detected {ref_types}"
+                )
+
+        if not dtype:
+            dtype, _ = max(self.hist.items(), key=lambda t: t[1])
+        return dtype
 
     def _set_dtype(self, value):
+        """Update dtype store based on input."""
+
         if value is not None:
             v_dtype = type(value).__name__
             if v_dtype in self.numeric_types:
@@ -50,6 +78,7 @@ class Field:
         return None
 
     def _store_dtype_change(self, value):
+        """Maintain state for previous dtypes."""
 
         _prev_value = self.max_value
 
@@ -82,6 +111,7 @@ class Field:
         return False
 
     def add(self, value):
+        """Add value to field and track dtype."""
 
         if value is not None:
             self._valid_type(value)
@@ -91,6 +121,8 @@ class Field:
             self.num_na += 1
 
     def _add_comparable(self, value, key_func):
+        """Set max value for inputs which can be compared."""
+
         if self.max_value is not None:
             self.max_value = max(value, self.max_value, key=key_func)
         else:
@@ -112,7 +144,8 @@ class Field:
 class MaxDict:
     """Collect and store field, `max` value per key branch."""
 
-    def __init__(self):
+    def __init__(self, str_numeric_override=False):
+        self.str_numeric_override = str_numeric_override
         self.hist = defaultdict(int)
         self.key_store = {}
 
@@ -121,7 +154,9 @@ class MaxDict:
         if key in self.key_store:
             self.key_store[key].add(value)
         else:
-            self.key_store[key] = Field(key, value)
+            self.key_store[key] = Field(
+                key, value, str_numeric_override=self.str_numeric_override
+            )
 
     def load_dict(self, d: Dict):
         for key, value in extract_terminal_keys(d):

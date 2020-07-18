@@ -27,7 +27,7 @@ str__vals = ["x", "", "xx", ""]
 str__expected = ["str", False, "xx", {}]
 
 int_to_str__vals = [1, 2.1, "x", 1, "xx", 100, True]
-int_to_str__expected = ["bool", False, True, {"int": 100, "str": "xx"}]
+int_to_str__expected = ["int", False, True, {"int": 100, "str": "xx"}]
 
 
 @pytest.mark.parametrize(
