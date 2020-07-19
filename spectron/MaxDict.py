@@ -23,13 +23,23 @@ class Field:
         self.parent_key = parent_key
         self.str_numeric_override = str_numeric_override
         self.num_na = 0
-        self.dtype_change = {}
-        self.max_value = None
-        self.is_numeric = False
-        self._add_next_value = None
+        self.dtype_max = {}
         self.hist = defaultdict(int)
-        self._dtype = self._set_dtype(value)
         self.add(value)
+        self._test_ver = "4"
+
+    def push_warnings(self):
+        """Detect and log mixed dtypes."""
+
+        if len(self.hist.keys()) > 1:
+            if isinstance(self.parent_key, tuple):
+                ref_par_key = ".".join(self.parent_key)
+            else:
+                ref_par_key = self.parent_key
+
+            logger.warning(
+                f"[{ref_par_key}] dtypes detected {', '.join(sorted(self.hist.keys()))}"
+            )
 
     @property
     def dtype(self):
@@ -44,98 +54,65 @@ class Field:
 
         dtype = None
         if self.str_numeric_override and "str" in self.hist:
-            ref_types = self.numeric_types & self.hist.keys()
-            if ref_types:
+            if self.numeric_types & self.hist.keys():
                 dtype = "str"
-
-                if isinstance(self.parent_key, tuple):
-                    ref_par_key = ".".join(self.parent_key)
-                else:
-                    ref_par_key = self.parent_key
-                logger.warning(
-                    f"[{ref_par_key}] mixed str and numeric dtypes detected {ref_types}"
-                )
 
         if not dtype:
             dtype, _ = max(self.hist.items(), key=lambda t: t[1])
         return dtype
 
-    def _set_dtype(self, value):
-        """Update dtype store based on input."""
+    def _get_max_comparable(self, prev_value, value, key_func):
+        """Get max value for inputs which can be compared."""
 
-        if value is not None:
-            v_dtype = type(value).__name__
-            if v_dtype in self.numeric_types:
-                self.is_numeric = True
-                self._add_next_value = self._add_numeric
-            else:
-                self.is_numeric = False
-                if v_dtype == "str":
-                    self._add_next_value = self._add_str
-                else:
-                    self._add_next_value = self._identity
-            return v_dtype
-        return None
+        max_value = None
+        if prev_value is None:
+            max_value = value
+        else:
+            max_value = max(value, prev_value, key=key_func)
+        return max_value
 
-    def _store_dtype_change(self, value):
-        """Maintain state for previous dtypes."""
+    def _compare_numeric(self, prev_value, value):
+        return self._get_max_comparable(prev_value, value, abs)
 
-        _prev_value = self.max_value
+    def _compare_str(self, prev_value, value):
+        return self._get_max_comparable(prev_value, value, len)
 
-        if self.dtype_change:
-            if self._dtype in self.dtype_change:
-                prev = self.dtype_change[self._dtype]
-                if self._dtype == "str":
-                    _prev_value = max(prev, self.max_value)
-                elif self._dtype in self.numeric_types:
-                    _prev_value = max(prev, abs(self.max_value))
+    def _compare_other_types(self, prev_value, value):
+        return value
 
-        self.dtype_change[self._dtype] = _prev_value
-        self._dtype = self._set_dtype(value)
-        self.max_value = None
+    @property
+    def max_value(self):
+        return self.dtype_max.get(self.dtype)
 
-    def _valid_type(self, value):
+    def _update_dtype_max(self, incoming_dtype, value):
         """Detect dtype change and store diffs."""
 
-        v_dtype = type(value).__name__
+        if incoming_dtype in self.dtype_max:
+            prev_value = self.dtype_max[incoming_dtype]
 
-        if self._dtype:
-            if v_dtype == self._dtype:
-                return True
-            elif v_dtype in self.numeric_types and self.is_numeric:
-                return True
+            comp_func = None
+            if incoming_dtype == "str":
+                comp_func = self._compare_str
+            elif incoming_dtype in self.numeric_types:
+                comp_func = self._compare_numeric
             else:
-                self._store_dtype_change(value)
+                comp_func = self._compare_other_types
+
+            self.dtype_max[incoming_dtype] = comp_func(prev_value, value)
+
         else:
-            self._dtype = self._set_dtype(value)
-        return False
+            self.dtype_max[incoming_dtype] = value
 
     def add(self, value):
         """Add value to field and track dtype."""
 
         if value is not None:
-            self._valid_type(value)
-            self._add_next_value(value)
+            incoming_dtype = type(value).__name__
+            self._update_dtype_max(incoming_dtype, value)
+            self._dtype = incoming_dtype
             self.hist[self._dtype] += 1
         else:
             self.num_na += 1
-
-    def _add_comparable(self, value, key_func):
-        """Set max value for inputs which can be compared."""
-
-        if self.max_value is not None:
-            self.max_value = max(value, self.max_value, key=key_func)
-        else:
-            self.max_value = value
-
-    def _add_numeric(self, value):
-        self._add_comparable(value, abs)
-
-    def _add_str(self, value):
-        self._add_comparable(value, len)
-
-    def _identity(self, value):
-        self.max_value = value
 
 
 # --------------------------------------------------------------------------------------

@@ -6,28 +6,28 @@ from spectron.MaxDict import Field
 
 
 none__vals = [None, None]
-none__expected = [None, False, None, {}]
+none__expected = [None, None]
 
 int_none__vals = [None, 1, None]
-int_none__expected = ["int", True, 1, {}]
+int_none__expected = ["int", 1]
 
 int_abs__vals = [1, 100, -100]
-int_abs__expected = ["int", True, -100, {}]
+int_abs__expected = ["int", -100]
 
 int_to_float__vals = [1, 0.1]
-int_to_float__expected = ["int", True, 1, {}]
+int_to_float__expected = ["int", 1]
 
 float_to_int__vals = [0.1, 1]
-float_to_int__expected = ["float", True, 1, {}]
+float_to_int__expected = ["float", 0.1]
 
 bool__vals = [True, False]
-bool__expected = ["bool", False, False, {}]
+bool__expected = ["bool", False]
 
 str__vals = ["x", "", "xx", ""]
-str__expected = ["str", False, "xx", {}]
+str__expected = ["str", "xx"]
 
 int_to_str__vals = [1, 2.1, "x", 1, "xx", 100, True]
-int_to_str__expected = ["int", False, True, {"int": 100, "str": "xx"}]
+int_to_str__expected = ["int", 100]
 
 
 @pytest.mark.parametrize(
@@ -49,8 +49,6 @@ def test__Field(vals, expected):
     for v in vals[1:]:
         field.add(v)
 
-    dtype, is_numeric, max_value, dtype_change = expected
+    dtype, max_value = expected
     assert field.dtype == dtype
-    assert field.is_numeric == is_numeric
     assert field.max_value == max_value
-    assert field.dtype_change == dtype_change
