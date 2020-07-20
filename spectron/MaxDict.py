@@ -19,87 +19,100 @@ class Field:
 
     numeric_types = {"int", "float"}
 
-    def __init__(self, parent_key: str, value=None):
+    def __init__(self, parent_key: str, value=None, *, str_numeric_override=False):
         self.parent_key = parent_key
+        self.str_numeric_override = str_numeric_override
         self.num_na = 0
-        self.dtype_change = {}
-        self.max_value = None
-        self.is_numeric = False
-        self._add_next_value = None
+        self.dtype_max = {}
         self.hist = defaultdict(int)
-        self.dtype = self._set_dtype(value)
         self.add(value)
+        self._test_ver = "4"
 
-    def _set_dtype(self, value):
-        if value is not None:
-            v_dtype = type(value).__name__
-            if v_dtype in self.numeric_types:
-                self.is_numeric = True
-                self._add_next_value = self._add_numeric
+    def push_warnings(self):
+        """Detect and log mixed dtypes."""
+
+        if len(self.hist.keys()) > 1:
+            if isinstance(self.parent_key, tuple):
+                ref_par_key = ".".join(self.parent_key)
             else:
-                self.is_numeric = False
-                if v_dtype == "str":
-                    self._add_next_value = self._add_str
-                else:
-                    self._add_next_value = self._identity
-            return v_dtype
-        return None
+                ref_par_key = self.parent_key
 
-    def _store_dtype_change(self, value):
+            logger.warning(
+                f"[{ref_par_key}] dtypes detected {', '.join(sorted(self.hist.keys()))}"
+            )
 
-        _prev_value = self.max_value
+    @property
+    def dtype(self):
+        """Get data type with highest count.
 
-        if self.dtype_change:
-            if self.dtype in self.dtype_change:
-                prev = self.dtype_change[self.dtype]
-                if self.dtype == "str":
-                    _prev_value = max(prev, self.max_value)
-                elif self.dtype in self.numeric_types:
-                    _prev_value = max(prev, abs(self.max_value))
+        If `str_numeric_override` is enabled and any strings have been seen, returned
+        dtype is forced as str.
+        """
 
-        self.dtype_change[self.dtype] = _prev_value
-        self.dtype = self._set_dtype(value)
-        self.max_value = None
+        if not self.hist:
+            return None
 
-    def _valid_type(self, value):
+        dtype = None
+        if self.str_numeric_override and "str" in self.hist:
+            if self.numeric_types & self.hist.keys():
+                dtype = "str"
+
+        if not dtype:
+            dtype, _ = max(self.hist.items(), key=lambda t: t[1])
+        return dtype
+
+    def _get_max_comparable(self, prev_value, value, key_func):
+        """Get max value for inputs which can be compared."""
+
+        max_value = None
+        if prev_value is None:
+            max_value = value
+        else:
+            max_value = max(value, prev_value, key=key_func)
+        return max_value
+
+    def _compare_numeric(self, prev_value, value):
+        return self._get_max_comparable(prev_value, value, abs)
+
+    def _compare_str(self, prev_value, value):
+        return self._get_max_comparable(prev_value, value, len)
+
+    def _compare_other_types(self, prev_value, value):
+        return value
+
+    @property
+    def max_value(self):
+        return self.dtype_max.get(self.dtype)
+
+    def _update_dtype_max(self, incoming_dtype, value):
         """Detect dtype change and store diffs."""
 
-        v_dtype = type(value).__name__
+        if incoming_dtype in self.dtype_max:
+            prev_value = self.dtype_max[incoming_dtype]
 
-        if self.dtype:
-            if v_dtype == self.dtype:
-                return True
-            elif v_dtype in self.numeric_types and self.is_numeric:
-                return True
+            comp_func = None
+            if incoming_dtype == "str":
+                comp_func = self._compare_str
+            elif incoming_dtype in self.numeric_types:
+                comp_func = self._compare_numeric
             else:
-                self._store_dtype_change(value)
+                comp_func = self._compare_other_types
+
+            self.dtype_max[incoming_dtype] = comp_func(prev_value, value)
+
         else:
-            self.dtype = self._set_dtype(value)
-        return False
+            self.dtype_max[incoming_dtype] = value
 
     def add(self, value):
+        """Add value to field and track dtype."""
 
         if value is not None:
-            self._valid_type(value)
-            self._add_next_value(value)
-            self.hist[self.dtype] += 1
+            incoming_dtype = type(value).__name__
+            self._update_dtype_max(incoming_dtype, value)
+            self._dtype = incoming_dtype
+            self.hist[self._dtype] += 1
         else:
             self.num_na += 1
-
-    def _add_comparable(self, value, key_func):
-        if self.max_value is not None:
-            self.max_value = max(value, self.max_value, key=key_func)
-        else:
-            self.max_value = value
-
-    def _add_numeric(self, value):
-        self._add_comparable(value, abs)
-
-    def _add_str(self, value):
-        self._add_comparable(value, len)
-
-    def _identity(self, value):
-        self.max_value = value
 
 
 # --------------------------------------------------------------------------------------
@@ -108,7 +121,8 @@ class Field:
 class MaxDict:
     """Collect and store field, `max` value per key branch."""
 
-    def __init__(self):
+    def __init__(self, str_numeric_override=False):
+        self.str_numeric_override = str_numeric_override
         self.hist = defaultdict(int)
         self.key_store = {}
 
@@ -117,7 +131,9 @@ class MaxDict:
         if key in self.key_store:
             self.key_store[key].add(value)
         else:
-            self.key_store[key] = Field(key, value)
+            self.key_store[key] = Field(
+                key, value, str_numeric_override=self.str_numeric_override
+            )
 
     def load_dict(self, d: Dict):
         for key, value in extract_terminal_keys(d):
