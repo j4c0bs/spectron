@@ -20,7 +20,7 @@ def find_version(*file_paths):
     raise RuntimeError("Unable to find version string.")
 
 
-requirements = ["black>=19.10b0", "pendulum>=2.1.0"]
+requirements = ["black>=19.10b0", "pendulum>=1.4.4"]
 
 
 with open("README.md", "r") as fh:
