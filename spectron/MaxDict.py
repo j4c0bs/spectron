@@ -43,22 +43,31 @@ class Field:
 
     @property
     def dtype(self):
-        """Get data type with highest count.
+        """Get data type conforming to spectrum requirements or with highest count.
 
         If `str_numeric_override` is enabled and any strings have been seen, returned
         dtype is forced as str.
+
+        If int and float have been seen, dtype defaults to float.
         """
 
-        if not self.hist:
-            return None
-
         dtype = None
-        if self.str_numeric_override and "str" in self.hist:
-            if self.numeric_types & self.hist.keys():
-                dtype = "str"
+        if self.hist:
 
-        if not dtype:
-            dtype, _ = max(self.hist.items(), key=lambda t: t[1])
+            if len(self.hist.keys()) == 1:
+                dtype = list(self.hist.keys())[0]
+            else:
+                numeric_intersect = self.numeric_types & self.hist.keys()
+
+                if numeric_intersect:
+                    if self.str_numeric_override and "str" in self.hist:
+                        dtype = "str"
+                    elif "float" in numeric_intersect:
+                        dtype = "float"
+
+            if not dtype:
+                dtype, _ = max(self.hist.items(), key=lambda t: t[1])
+
         return dtype
 
     def _get_max_comparable(self, prev_value, value, key_func):
@@ -82,7 +91,15 @@ class Field:
 
     @property
     def max_value(self):
-        return self.dtype_max.get(self.dtype)
+        """Get max value for current dtype."""
+
+        _dtype = self.dtype
+        is_numeric = _dtype in self.numeric_types
+
+        if is_numeric and self.numeric_types.issubset(self.hist.keys()):
+            return self._compare_numeric(self.dtype_max["float"], self.dtype_max["int"])
+
+        return self.dtype_max.get(_dtype)
 
     def _update_dtype_max(self, incoming_dtype, value):
         """Detect dtype change and store diffs."""

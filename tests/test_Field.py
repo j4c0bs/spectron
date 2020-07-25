@@ -15,10 +15,10 @@ int_abs__vals = [1, 100, -100]
 int_abs__expected = ["int", -100]
 
 int_to_float__vals = [1, 0.1]
-int_to_float__expected = ["int", 1]
+int_to_float__expected = ["float", 1]
 
 float_to_int__vals = [0.1, 1]
-float_to_int__expected = ["float", 0.1]
+float_to_int__expected = ["float", 1]
 
 bool__vals = [True, False]
 bool__expected = ["bool", False]
@@ -27,7 +27,7 @@ str__vals = ["x", "", "xx", ""]
 str__expected = ["str", "xx"]
 
 int_to_str__vals = [1, 2.1, "x", 1, "xx", 100, True]
-int_to_str__expected = ["int", 100]
+int_to_str__expected = ["float", 100]
 
 
 @pytest.mark.parametrize(
