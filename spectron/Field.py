@@ -3,8 +3,17 @@
 import logging
 
 from collections import defaultdict
+from itertools import chain
+from typing import Dict
 
 logger = logging.getLogger(__name__)
+
+
+def add_hist_dicts(d1: Dict, d2: Dict) -> Dict:
+    d = defaultdict(int)
+    for k, v in chain(d1.items(), d2.items()):
+        d[k] += v
+    return d
 
 
 class Field:
@@ -19,7 +28,20 @@ class Field:
         self.dtype_max = {}
         self.hist = defaultdict(int)
         self.add(value)
-        self._test_ver = "4"
+
+    def __add__(self, other):
+        str_numeric_override = any(
+            (self.str_numeric_override, other.str_numeric_override)
+        )
+        field = Field(self.parent_key, str_numeric_override=str_numeric_override)
+        field.num_na = self.num_na + other.num_na
+
+        for dtype, value in chain(self.dtype_max.items(), other.dtype_max.items()):
+            field._update_dtype_max(dtype, value)
+
+        hist = add_hist_dicts(self.hist, other.hist)
+        field.hist.update(hist)
+        return field
 
     def push_warnings(self):
         """Detect and log mixed dtypes."""
@@ -120,7 +142,6 @@ class Field:
         if value is not None:
             incoming_dtype = type(value).__name__
             self._update_dtype_max(incoming_dtype, value)
-            self._dtype = incoming_dtype
-            self.hist[self._dtype] += 1
+            self.hist[incoming_dtype] += 1
         else:
             self.num_na += 1

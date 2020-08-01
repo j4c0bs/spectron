@@ -7,7 +7,7 @@ from itertools import chain
 from typing import AbstractSet, Dict, Generator, List, Optional, Tuple
 
 from . import data_types
-from .Field import Field
+from .Field import Field, add_hist_dicts
 from .merge import construct_branch, extract_terminal_keys
 
 logger = logging.getLogger(__name__)
@@ -95,6 +95,26 @@ class MaxDict:
         self.hist = defaultdict(int)
         self.key_store = {}
         self.override_keys = None
+
+    def __add__(self, other):
+        str_numeric_override = any(
+            (self.str_numeric_override, other.str_numeric_override)
+        )
+        md = MaxDict(str_numeric_override=str_numeric_override)
+        md.hist.update(add_hist_dicts(self.hist, other.hist))
+
+        for key in self.key_store.keys() & other.key_store.keys():
+            md.key_store[key] = self.key_store[key] + other.key_store[key]
+
+        for key in self.key_store.keys() ^ other.key_store.keys():
+            if key in self.key_store:
+                field = self.key_store[key]
+            else:
+                field = other.key_store[key]
+
+            md.key_store[key] = field + Field(key)  # coerce new instance
+
+        return md
 
     def add(self, key: str, value):
         self.hist[key] += 1
