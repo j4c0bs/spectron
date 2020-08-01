@@ -2,7 +2,7 @@
 
 import pytest
 
-from spectron.MaxDict import Field
+from spectron.Field import Field
 
 
 none__vals = [None, None]
