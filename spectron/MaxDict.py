@@ -3,13 +3,62 @@
 import logging
 
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from itertools import chain
+from typing import AbstractSet, Dict, Generator, List, Optional, Tuple
 
 from . import data_types
 from .merge import construct_branch, extract_terminal_keys
 
 
 logger = logging.getLogger(__name__)
+
+# Mixed array group utils --------------------------------------------------------------
+
+
+def get_array_parents(field_key: Tuple[str]) -> Generator[Tuple[str], None, None]:
+    """Get all array parent keys."""
+
+    ix = 0
+    for _ in range(field_key.count("[array]")):
+        ix = field_key.index("[array]", ix)
+        yield field_key[:ix]
+        ix += 1
+
+
+def loc_siblings(
+    parent_key: Tuple[str], keys: List[Tuple[str]], is_array: Optional[bool] = None
+) -> List[Tuple[str]]:
+    """Locate Field keys which share a parent key."""
+
+    if is_array is not None:
+        if is_array:
+            comp = lambda k: k == "[array]"
+        else:
+            comp = lambda k: k != "[array]"
+    else:
+        comp = lambda k: True
+
+    res = []
+    num_parents = len(parent_key)
+    for k in keys:
+        if len(k) > num_parents:
+            if k[:num_parents] == parent_key and comp(k[num_parents]):
+                res.append(k)
+    return res
+
+
+def is_child(parent_key: Tuple[str], key: Tuple[str]) -> bool:
+    """Determines if keys have parent:child relationship.
+
+    Example using dot notation:
+        is_child(a.b, a.b.c) == True
+        is_child(a.b, a.b.c.d) == True
+        is_child(a.b, a.x.y) == False
+
+    """
+
+    return len(key) > len(parent_key) and key[: len(parent_key)] == parent_key
+
 
 # --------------------------------------------------------------------------------------
 
@@ -137,12 +186,37 @@ class Field:
 
 
 class MaxDict:
-    """Collect and store field, `max` value per key branch."""
+    """Collect and store field, `max` value per key branch.
 
-    def __init__(self, str_numeric_override=False):
+    When generating a dict, mixed data types and mixed array keys are resolved.
+
+    Data types:
+        For fields which have seen string and numeric, priority is determined via:
+            str > float > int
+
+    Array keys:
+        If a parent key contains both array and non-array child keys, the number of
+        values seen for all downstream branches are summed and compared. The key group
+        with the highest count will override the other. If counts are equal, array keys
+        are prioritized.
+
+        Example using dot notation:
+
+            terminal keys:
+                - a.b.[array].d.e = 10
+                - a.b.[array].d.f = 10
+                - a.b.c.x = 5
+                - a.b.c.y = 5
+
+            Count of a.b.[array] = 20, count of a.b.c = 10.
+            The output of MaxDict.asdict() will contain a.b.[array] and not a.b.c
+    """
+
+    def __init__(self, str_numeric_override: bool = False):
         self.str_numeric_override = str_numeric_override
         self.hist = defaultdict(int)
         self.key_store = {}
+        self.override_keys = None
 
     def add(self, key: str, value):
         self.hist[key] += 1
@@ -182,8 +256,14 @@ class MaxDict:
     def asdict(self, astype: bool = False) -> Dict:
         """Returned keys, [max | type] vals as dict."""
 
+        self.load_override_keys()
+
         d, loc = {}, {}
         for group_key, field in sorted(self.key_store.items(), key=lambda t: t[0]):
+
+            if group_key in self.override_keys:
+                continue
+
             is_dict = False
             val = field.max_value
 
@@ -204,3 +284,86 @@ class MaxDict:
             construct_branch(d, loc, group_key, is_dict=is_dict, key_val=val)
 
         return d
+
+    # detect mixed array - dict keys ---------------------------------------------------
+
+    def sum_key_groups(self, parent_key: Tuple[str]) -> Dict:
+        """Sums Field value counts in array, non-array branch groups."""
+
+        key_groups = {
+            "array": {"keys": [], "total": 0},
+            "non_array": {"keys": [], "total": 0},
+        }
+
+        par_ix = len(parent_key)
+        for key, field in self.key_store.items():
+            if is_child(parent_key, key):
+                count = sum(field.hist.values())
+
+                if key[par_ix] == "[array]":
+                    group_ref = key_groups["array"]
+                else:
+                    group_ref = key_groups["non_array"]
+
+                group_ref["total"] += count
+                group_ref["keys"].append(key)
+
+        return key_groups
+
+    def detect_mixed_array_parents(self) -> AbstractSet[Tuple[str]]:
+        """Detect parent keys which have array and non-array children.
+
+        Example using dot notation:
+
+            terminal keys:
+                - a.b.[array].d
+                - a.b.c.d
+            mixed array parent:
+                - a.b
+        """
+
+        keys = sorted(self.key_store.keys(), key=lambda t: len(t))
+        array_keys = [k for k in keys if "[array]" in k]
+        array_parents = sorted(
+            set(chain(*map(get_array_parents, array_keys))), key=lambda t: len(t)
+        )
+
+        mixed_array_parents = set()
+        for parent_key in array_parents:
+            non_array_siblings = loc_siblings(parent_key, keys, is_array=False)
+            if non_array_siblings:
+                mixed_array_parents.add(parent_key)
+
+        return mixed_array_parents
+
+    def load_override_keys(self):
+        """Inspect mixed array groups and select group with highest count.
+
+        If counts are equal, array keys take precedence and non-array keys are ignored
+        when constructing dict.
+        """
+
+        self.override_keys = []
+        mixed_array_parents = self.detect_mixed_array_parents()
+
+        for parent_key in mixed_array_parents:
+            key_groups = self.sum_key_groups(parent_key)
+
+            pk_ref = ".".join(parent_key)
+            num_array = key_groups["array"]["total"]
+            num_non_array = key_groups["non_array"]["total"]
+
+            if num_array >= num_non_array:
+                self.override_keys.extend(key_groups["non_array"]["keys"])
+
+                logger.warning(
+                    f"{pk_ref}: Array keys override non-arrays: {num_array:,} >= {num_non_array:,}"
+                )
+            else:
+                self.override_keys.extend(key_groups["array"]["keys"])
+
+                logger.warning(
+                    f"{pk_ref}: Non-Array keys override arrays: {num_non_array:,} >= {num_array:,}"
+                )
+
+        self.override_keys = set(self.override_keys)
