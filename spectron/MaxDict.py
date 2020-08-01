@@ -47,13 +47,13 @@ def loc_siblings(
     return res
 
 
-def is_child(parent_key: Tuple[str], key: Tuple[str]) -> bool:
+def is_parent(parent_key: Tuple[str], key: Tuple[str]) -> bool:
     """Determines if keys have parent:child relationship.
 
     Example using dot notation:
-        is_child(a.b, a.b.c) == True
-        is_child(a.b, a.b.c.d) == True
-        is_child(a.b, a.x.y) == False
+        is_parent(a.b, a.b.c) == True
+        is_parent(a.b, a.b.c.d) == True
+        is_parent(a.b, a.x.y) == False
 
     """
 
@@ -254,7 +254,7 @@ class MaxDict:
         return loc
 
     def asdict(self, astype: bool = False) -> Dict:
-        """Returned keys, [max | type] vals as dict."""
+        """Resolved keys, [max | type] vals as dict."""
 
         self.load_override_keys()
 
@@ -285,7 +285,7 @@ class MaxDict:
 
         return d
 
-    # detect mixed array - dict keys ---------------------------------------------------
+    # detect mixed terminal, array - dict keys -----------------------------------------
 
     def sum_key_groups(self, parent_key: Tuple[str]) -> Dict:
         """Sums Field value counts in array, non-array branch groups."""
@@ -297,7 +297,7 @@ class MaxDict:
 
         par_ix = len(parent_key)
         for key, field in self.key_store.items():
-            if is_child(parent_key, key):
+            if is_parent(parent_key, key):
                 count = sum(field.hist.values())
 
                 if key[par_ix] == "[array]":
@@ -310,7 +310,9 @@ class MaxDict:
 
         return key_groups
 
-    def detect_mixed_array_parents(self) -> AbstractSet[Tuple[str]]:
+    def detect_mixed_array_parents(
+        self, keys: List[Tuple[str]]
+    ) -> AbstractSet[Tuple[str]]:
         """Detect parent keys which have array and non-array children.
 
         Example using dot notation:
@@ -322,7 +324,6 @@ class MaxDict:
                 - a.b
         """
 
-        keys = sorted(self.key_store.keys(), key=lambda t: len(t))
         array_keys = [k for k in keys if "[array]" in k]
         array_parents = sorted(
             set(chain(*map(get_array_parents, array_keys))), key=lambda t: len(t)
@@ -336,6 +337,26 @@ class MaxDict:
 
         return mixed_array_parents
 
+    def detect_mixed_terminal_keys(self, keys: List[Tuple[str]]) -> List[Tuple[str]]:
+        """Detect terminal keys which are also parent keys.
+
+        Example using dot notation:
+            - a.b (added to override_keysride)
+            - a.b.c
+        """
+
+        max_num_keys = max(len(k) for k in keys)
+        mixed_terminal_keys = []
+
+        for parent_key in (k for k in keys if len(k) < max_num_keys):
+            parent_key_len = len(parent_key)
+            for child_key in (k for k in keys if len(k) > parent_key_len):
+                if is_parent(parent_key, child_key):
+                    mixed_terminal_keys.append(parent_key)
+                    break
+
+        return sorted(mixed_terminal_keys, key=lambda t: len(t))
+
     def load_override_keys(self):
         """Inspect mixed array groups and select group with highest count.
 
@@ -344,9 +365,20 @@ class MaxDict:
         """
 
         self.override_keys = []
-        mixed_array_parents = self.detect_mixed_array_parents()
+        keys = sorted(self.key_store.keys(), key=lambda t: len(t))
+        mixed_terminal_keys = self.detect_mixed_terminal_keys(keys)
 
-        for parent_key in mixed_array_parents:
+        if mixed_terminal_keys:
+            self.override_keys.extend(mixed_terminal_keys)
+
+            # filter terminal keys before detecting mixed array keys
+            keys = [k for k in keys if k not in mixed_terminal_keys]
+
+            for terminal_key in mixed_terminal_keys:
+                logger.warning(f"Terminal key detected: {'.'.join(terminal_key)}")
+
+        mixed_array_parents = self.detect_mixed_array_parents(keys)
+        for parent_key in sorted(mixed_array_parents, key=lambda t: len(t)):
             key_groups = self.sum_key_groups(parent_key)
 
             pk_ref = ".".join(parent_key)
