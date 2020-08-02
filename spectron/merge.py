@@ -7,12 +7,8 @@ def pk(parent: Optional[Union[Tuple[str], List[str]]], key: str) -> Tuple[str]:
     """Construct chained parent key as list of strings."""
 
     if parent:
-        parent = [*parent]
-    else:
-        parent = []
-
-    parent.append(key)
-    return tuple(parent)
+        return tuple((*parent, key))
+    return tuple((key,))
 
 
 def terminal(v: Any) -> bool:
