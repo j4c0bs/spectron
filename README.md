@@ -1,4 +1,6 @@
 ![Upload Python Package](https://github.com/j4c0bs/spectron/workflows/.github/workflows/pythonpublish.yml/badge.svg?branch>=0.2.4)
+![pip](https://img.shields.io/pypi/v/spectron.svg?style=flat-square)
+
 
 # [WIP] spectron
 
