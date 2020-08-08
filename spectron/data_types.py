@@ -99,7 +99,7 @@ def type_set(t: list):
     return set(map(type, t))
 
 
-def int_in_bounds(num_bits, val):
+def num_in_bounds(num_bits, val):
     n_max = (2 ** num_bits) // 2
     if val > 0:
         n_max -= 1
@@ -122,27 +122,32 @@ def __str_dtype(val: str, infer_date: bool = False):
 
 
 @set_dtype.register
-def __float_dtype(val: float, **kwargs):
-
-    num_bits = (64 - 15, 32 - 6)
-    dtypes = ("FLOAT8", "FLOAT4")
+def __float_dtype(val: float, strict: bool = False, **kwargs):
 
     dtype = None
-    for n, dtype in zip(num_bits, dtypes):
-        if abs(val) >= 2 ** n // 2:
-            break
+
+    if num_in_bounds(32 - 6, val):
+        dtype = "FLOAT4"
+    elif num_in_bounds(64 - 15, val):
+        dtype = "FLOAT8"
+    elif strict:
+        raise OverflowError(f"FLOAT exceeds 49 bits: {val}")
     return dtype
 
 
 @set_dtype.register
-def __int_dtype(val: int, **kwargs):
+def __int_dtype(val: int, strict: bool = False, **kwargs):
 
-    if int_in_bounds(16, val):
+    dtype = None
+
+    if num_in_bounds(16, val):
         dtype = "SMALLINT"
-    elif int_in_bounds(32, val):
+    elif num_in_bounds(32, val):
         dtype = "INT"
-    else:
+    elif num_in_bounds(64, val):
         dtype = "BIGINT"
+    elif strict:
+        raise OverflowError(f"INT exceeds 64 bits: {val}")
     return dtype
 
 
