@@ -17,8 +17,10 @@ def add_hist_dicts(d1: Dict, d2: Dict) -> Dict:
 
 
 class Field:
-    """Tracks `max` value and data type(s)."""
+    """Tracks max value and data type(s)."""
 
+    _max_int = 2 ** 64 // 2
+    _max_float = 2 ** (65 - 14) // 2
     numeric_types = {"int", "float"}
 
     def __init__(self, parent_key: str, value=None, *, str_numeric_override=False):
@@ -46,20 +48,25 @@ class Field:
     def push_warnings(self):
         """Detect and log mixed dtypes, int overflow."""
 
+        if isinstance(self.parent_key, tuple):
+            par_key = ".".join(self.parent_key)
+        else:
+            par_key = self.parent_key
+
         if len(self.hist.keys()) > 1:
-            if isinstance(self.parent_key, tuple):
-                ref_par_key = ".".join(self.parent_key)
-            else:
-                ref_par_key = self.parent_key
-
             logger.warning(
-                f"[{ref_par_key}] dtypes detected {', '.join(sorted(self.hist.keys()))}"
+                f"[{par_key}] dtypes detected {', '.join(sorted(self.hist.keys()))}"
             )
 
-        if "int" in self.dtype_max and abs(self.dtype_max["int"]) >= 2 ** 64:
-            logger.warning(
-                f"[{ref_par_key}] integer exceeds BIGINT max (2**64): {self.dtype_max['int']}"
-            )
+        for str_type, str_ref, num_max in zip(
+            ("int", "float"),
+            ("BIGINT (2**64)", "FLOAT8 (2**(65 - 14)//2)"),
+            (self._max_int, self._max_float),
+        ):
+            if str_type in self.dtype_max and abs(self.dtype_max[str_type]) >= num_max:
+                logger.warning(
+                    f"[{par_key}] {str_type} exceeds max {str_ref}: {self.dtype_max[str_type]}"
+                )
 
     @property
     def dtype(self):
