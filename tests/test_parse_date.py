@@ -5,7 +5,7 @@ import pytest
 from spectron import parse_date
 
 
-@pytest.mark.parametrize("s, expected", [("", 0), ("a", 0), ("1", 1), ("a1b2", 2),])
+@pytest.mark.parametrize("s, expected", [("", 0), ("a", 0), ("1", 1), ("a1b2", 2)])
 def test_num_digits(s, expected):
     assert parse_date.num_digits(s) == expected
 

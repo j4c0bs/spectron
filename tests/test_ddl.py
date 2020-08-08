@@ -80,10 +80,17 @@ def test__count_members(d, expected):
             {"type_map": {"A": "TEST_TYPE"}, "case_map": True},
             ({"a": "SMALLINT"}, {"a": "A"}),
         ),
+        ({"bigint": 2 ** 64}, {}, ({"bigint": "BIGINT"}, {})),
     ],
 )
 def test__define_types(d, kwargs, expected):
     assert ddl.define_types(d, **kwargs) == expected
+
+
+def test__define_types__overflow():
+    d = {"bigint": 2 ** 64}
+    with pytest.raises(OverflowError):
+        ddl.define_types(d, numeric_overflow=True)
 
 
 # Test Key Ops -------------------------------------------------------------------------

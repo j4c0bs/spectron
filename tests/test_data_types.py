@@ -10,7 +10,7 @@ from spectron.data_types import set_dtype
     [
         ("str", "VARCHAR"),
         (1.234, "FLOAT4"),
-        (281474976710656.1, "FLOAT8"),
+        (281474976710655.0, "FLOAT8"),
         (1, "SMALLINT"),
         (32767, "SMALLINT"),
         (32768, "INT"),
@@ -24,6 +24,7 @@ def test__set_dtype(val, expected):
     assert set_dtype(val) == expected
 
 
-def test__set_dtype__out_of_bounds():
-    with pytest.raises(ValueError):
-        set_dtype(2 ** 64 // 2)
+@pytest.mark.parametrize("val", [float(2 ** (64 - 15) // 2), (2 ** 64 // 2)])
+def test__set_dtype__out_of_bounds(val):
+    with pytest.raises(OverflowError):
+        set_dtype(val, strict=True)

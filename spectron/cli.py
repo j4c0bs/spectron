@@ -43,7 +43,7 @@ def parse_arguments():
     """Parse CLI args."""
 
     parser = argparse.ArgumentParser(
-        description="Generate Athena and Spectrum DDL from JSON",
+        description=f"Generate Athena and Spectrum DDL from JSON (v{version})",
     )
 
     parser.set_defaults(partitions=None, mapping=None, type_map=None)
@@ -57,7 +57,7 @@ def parse_arguments():
         dest="infile",
         type=argparse.FileType("r"),
         nargs="+",
-        help="JSON files to convert",
+        help="JSON file(s) to convert",
     )
 
     case_group = parser.add_mutually_exclusive_group()
@@ -76,6 +76,13 @@ def parse_arguments():
         action="store_true",
         dest="case_insensitive",
         help="DDL: enable case insensitivity and force all fields to lowercase - applied before field lookup in mapping",
+    )
+
+    parser.add_argument(
+        "-n",
+        "--numeric_overflow",
+        action="store_true",
+        help="raise exception on numeric overflow",
     )
 
     parser.add_argument(

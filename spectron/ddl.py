@@ -256,6 +256,7 @@ def define_types(
     case_map=False,
     case_insensitive=False,
     ignore_nested_arrarys=True,
+    numeric_overflow=False,
 ):
     """Replace values with data types and maintain data structure."""
 
@@ -271,6 +272,10 @@ def define_types(
         "case_insensitive": case_insensitive,
         "ignore_nested_arrarys": ignore_nested_arrarys,
     }
+
+    set_dtype = partial(
+        data_types.set_dtype, infer_date=infer_date, strict=numeric_overflow
+    )
 
     def parse_types(d, parent=None):
         """Crawl and assign data types."""
@@ -334,7 +339,7 @@ def define_types(
                     if dtype:
                         as_types[key] = dtype
                 else:
-                    inferred_dtype = data_types.set_dtype(val, infer_date=infer_date)
+                    inferred_dtype = set_dtype(val)
 
                     # detect dtype mismatch between inferred and user provided
                     if dtype and dtype != inferred_dtype:
@@ -358,7 +363,7 @@ def define_types(
                         as_types[key] = dtype
 
         else:
-            as_types = data_types.set_dtype(d, infer_date=infer_date)
+            as_types = set_dtype(d)
 
         return as_types
 
@@ -368,30 +373,10 @@ def define_types(
 # --------------------------------------------------------------------------------------
 
 
-def format_definitions(
-    d,
-    mapping=None,
-    type_map=None,
-    ignore_fields=None,
-    infer_date=False,
-    convert_hyphens=False,
-    case_map=False,
-    case_insensitive=False,
-    ignore_nested_arrarys=True,
-):
+def format_definitions(d, **kwargs):
     """Format field names and set dtypes."""
 
-    with_types, key_map = define_types(
-        d,
-        mapping=mapping,
-        type_map=type_map,
-        ignore_fields=ignore_fields,
-        infer_date=infer_date,
-        convert_hyphens=convert_hyphens,
-        case_map=case_map,
-        case_insensitive=case_insensitive,
-        ignore_nested_arrarys=ignore_nested_arrarys,
-    )
+    with_types, key_map = define_types(d, **kwargs)
 
     if not with_types:
         logger.warning("Aborting - input does not contain valid data structures...")
@@ -426,6 +411,7 @@ def from_dict(
     case_insensitive=False,
     ignore_malformed_json=True,
     ignore_nested_arrarys=True,
+    numeric_overflow=False,
     **kwargs,
 ):
     """Create Spectrum schema from dict."""
@@ -441,6 +427,7 @@ def from_dict(
         case_map=case_map,
         case_insensitive=case_insensitive,
         ignore_nested_arrarys=ignore_nested_arrarys,
+        numeric_overflow=numeric_overflow,
     )
 
     statement = write_ddl.create_statement(

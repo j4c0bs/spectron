@@ -16,22 +16,36 @@ pip install spectron[json]
 ## CLI Usage:
 
 ```
+# single input file:
 spectron nested_big_data.json > nested_big_data.sql
+
+# multiple input files to summarize all key structures seen:
+spectron dataz/*.json > big_data.sql
 ```
 
 ---
 
 ```
+usage: spectron [-h] [-V] [-v] [-c | -l] [-n] [-d] [-r] [-e]
+                [-f col1,col2,...] [-m filepath] [-y filepath] [-p filepath]
+                [-j] [-s schema] [-t table] [--s3 s3://bucket/key]
+                infile [infile ...]
+
+Generate Athena and Spectrum DDL from JSON
+
 positional arguments:
-  infile                JSON to convert
+  infile                JSON file(s) to convert
 
 optional arguments:
   -h, --help            show this help message and exit
-  -v, --version         show program's version number and exit
+  -V, --version         show program's version number and exit
+  -v, --verbose         increase logging level
   -c, --case_map        disable case insensitivity and map field with
                         uppercase chars to lowercase
   -l, --lowercase       DDL: enable case insensitivity and force all fields to
                         lowercase - applied before field lookup in mapping
+  -n, --numeric_overflow
+                        raise exception on numeric overflow
   -d, --infer_date      infer date string types - supports ISO 8601 for date,
                         datetime[TZ]
   -r, --retain_hyphens  disable auto convert hypens to underscores
