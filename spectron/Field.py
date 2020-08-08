@@ -44,7 +44,7 @@ class Field:
         return field
 
     def push_warnings(self):
-        """Detect and log mixed dtypes."""
+        """Detect and log mixed dtypes, int overflow."""
 
         if len(self.hist.keys()) > 1:
             if isinstance(self.parent_key, tuple):
@@ -54,6 +54,11 @@ class Field:
 
             logger.warning(
                 f"[{ref_par_key}] dtypes detected {', '.join(sorted(self.hist.keys()))}"
+            )
+
+        if "int" in self.dtype_max and abs(self.dtype_max["int"]) >= 2 ** 64:
+            logger.warning(
+                f"[{ref_par_key}] integer exceeds BIGINT max (2**64): {self.dtype_max['int']}"
             )
 
     @property

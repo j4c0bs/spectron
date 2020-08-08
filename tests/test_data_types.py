@@ -17,13 +17,9 @@ from spectron.data_types import set_dtype
         (2147483647, "INT"),
         (2147483648, "BIGINT"),
         (9223372036854775807, "BIGINT"),
+        (2 ** 64 + 1, "BIGINT"),
         (True, "BOOL"),
     ],
 )
 def test__set_dtype(val, expected):
     assert set_dtype(val) == expected
-
-
-def test__set_dtype__out_of_bounds():
-    with pytest.raises(ValueError):
-        set_dtype(2 ** 64 // 2)

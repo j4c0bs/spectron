@@ -141,10 +141,8 @@ def __int_dtype(val: int, **kwargs):
         dtype = "SMALLINT"
     elif int_in_bounds(32, val):
         dtype = "INT"
-    elif int_in_bounds(64, val):
-        dtype = "BIGINT"
     else:
-        raise ValueError(f"Input exceeds integer max number of bits: {val}")
+        dtype = "BIGINT"
     return dtype
 
 
