@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from pendulum import parse as strict_parse
-from pendulum.exceptions import ParserError
+from pendulum import parse
 
 
 def num_digits(s: str):
@@ -20,10 +19,8 @@ def guess_type(s: str):
         return None
 
     try:
-        strict_parse(s)
-    except ValueError:
-        return None
-    except ParserError:
+        parse(s)
+    except:  # noqa: E722
         return None
 
     if n == 8:
