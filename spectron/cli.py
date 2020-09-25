@@ -197,7 +197,9 @@ def parse_arguments():
     return args
 
 
-def load_dict_from_infiles(infiles: List[io.TextIOWrapper]) -> Dict:
+def load_dict_from_infiles(
+    infiles: List[io.TextIOWrapper], case_insensitive: bool
+) -> Dict:
     """Load JSON infile(s) as dict | max dict.
     If > 1 files or any input is a list of dicts, max dict is used as schema source.
     """
@@ -209,7 +211,7 @@ def load_dict_from_infiles(infiles: List[io.TextIOWrapper]) -> Dict:
         else:
             infiles[0].seek(0)
 
-    md = MaxDict()
+    md = MaxDict(case_insensitive=case_insensitive)
     for infile in infiles:
         d = json.loads(infile.read())
 
@@ -227,7 +229,7 @@ def create_spectrum_schema():
     """Create Spectrum schema from JSON."""
 
     args = parse_arguments()
-    d = load_dict_from_infiles(args.infile)
+    d = load_dict_from_infiles(args.infile, args.case_insensitive)
 
     kwargs = {k: v for (k, v) in args._get_kwargs()}
     statement = ddl.from_dict(d, **kwargs)

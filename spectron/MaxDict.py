@@ -4,7 +4,7 @@ import logging
 
 from collections import defaultdict
 from itertools import chain
-from typing import AbstractSet, Dict, Generator, List, Optional, Tuple
+from typing import AbstractSet, Dict, Generator, List, Optional, Tuple, Union
 
 from . import data_types
 from .Field import Field, add_hist_dicts
@@ -90,7 +90,10 @@ class MaxDict:
             The output of MaxDict.asdict() will contain a.b.[array] and not a.b.c
     """
 
-    def __init__(self, str_numeric_override: bool = False):
+    def __init__(
+        self, case_insensitive: bool = False, str_numeric_override: bool = False
+    ):
+        self.case_insensitive = case_insensitive
         self.str_numeric_override = str_numeric_override
         self.hist = defaultdict(int)
         self.key_store = {}
@@ -116,7 +119,14 @@ class MaxDict:
 
         return md
 
-    def add(self, key: str, value):
+    def add(self, key: Union[str, Tuple[str]], value):
+
+        if self.case_insensitive:
+            if isinstance(key, str):
+                key = key.lower()
+            else:
+                key = tuple(map(str.lower, key))
+
         self.hist[key] += 1
         if key in self.key_store:
             self.key_store[key].add(value)

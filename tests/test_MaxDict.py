@@ -59,3 +59,34 @@ def test__add_max_dicts():
     }
 
     assert mdx.asdict() == expected
+
+
+def test__max_dicts__case():
+    d1 = {
+        "a1": {"b1": 1, "B2": "test", "B3": "x"},
+        "a2": -100,
+        "a3": {"b3": [{"c3": False}]},
+        "a4": 1.234,
+    }
+    d2 = {
+        "a1": {"b1": 10 ** 10, "b2": "x", "b3": "test"},
+        "a2": 1,
+        "a3": {"b3": [{"c3": True}]},
+        "a4": 2.345,
+    }
+
+    md1 = MaxDict(case_insensitive=True)
+    md1.load_dict(d1)
+    md2 = MaxDict(case_insensitive=True)
+    md2.load_dict(d2)
+
+    mdx = md1 + md2
+
+    expected = {
+        "a1": {"b1": 10000000000, "b2": "test", "b3": "test"},
+        "a2": -100,
+        "a3": {"b3": [{"c3": True}]},
+        "a4": 2.345,
+    }
+
+    assert mdx.asdict() == expected
