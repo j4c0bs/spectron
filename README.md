@@ -2,7 +2,7 @@
 ![pip](https://img.shields.io/pypi/v/spectron.svg?style=flat-square)
 
 
-# [WIP] spectron
+# Spectron
 
 Generate AWS Athena and Spectrum DDL from JSON
 
